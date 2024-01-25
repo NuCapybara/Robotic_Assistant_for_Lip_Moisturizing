@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+    <node pkg="apriltag_ros" exec="apriltag_node" output="log">
+        <param from="$(find-pkg-share control)/tags.yaml"/>
+        <remap from="camera_info" to="camera/color/camera_info"/>
+        <remap from="image_rect" to="camera/color/image_raw"/>
+    </node>
+
+    <include file="$(find-pkg-share interbotix_xsarm_control)/launch/xsarm_control.launch.py">
+        <arg name="robot_model" value="wx200" />
+        <arg name="use_joint_pub_gui" value="true" />
+    </include> 
+</launch> 
