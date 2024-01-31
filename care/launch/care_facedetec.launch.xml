@@ -3,6 +3,6 @@
 
     <node pkg="care" exec="care" />
 
-    <node pkg="face_recognition_ros_node" exec="face_recognition_ros_node"/>
+    <node pkg="face_recognition_ros_node" exec="Face_detection"/>
 
 </launch> 

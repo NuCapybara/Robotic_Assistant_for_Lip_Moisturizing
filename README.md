@@ -19,6 +19,15 @@ ros2 launch realsense2_camera rs_launch.py depth_module.profile:=1280x720x30 poi
 ros2 launch ros_april_tag detect_tag.launch.xml
 ```
 
+```
+python video_facial_landmarks.py \--shape-predictor shape_predictor_68_face_landmarks.dat
+```
+
+```
+ros2 launch care care_facedetec.launch.xml
+
+```
+
 ## Reference
 
 ```https://github.com/ostadabbas/3d-facial-landmark-detection-and-tracking/blob/master/face_landmark_detection.py```

@@ -11,7 +11,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
     ],
-    install_requires=['setuptools', 'dlib', 'imutils', 'opencv-python', 'pyrealsense2'],
+    install_requires=['setuptools'],
     zip_safe=True,
     maintainer='jialuyu',
     maintainer_email='jialuyu2024@u.northwestern.edu',
@@ -20,7 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'face_recognition_ros_node = face_recognition_ros_node.face_detec_ros:main',
+            'Face_detection = face_recognition_ros_node.face_detec_ros:main',
         ],
     },
 )
