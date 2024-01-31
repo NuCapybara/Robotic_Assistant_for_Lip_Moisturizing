@@ -1,4 +1,5 @@
 import rclpy
+import os
 from rclpy.node import Node
 from imutils.video import FPS
 from imutils import face_utils
@@ -15,6 +16,7 @@ from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image as msg_Image
 from sensor_msgs.msg import CameraInfo
 from geometry_msgs.msg import Point
+from ament_index_python.packages import get_package_share_directory
 
 
 class FaceDetection(Node):
@@ -31,7 +33,6 @@ class FaceDetection(Node):
         self._latest_color_img = None
         self._latest_color_img_ts = None
         self.inference_ts = None
-        self.intrinsics = None
         self.x1 = None
         self.y1 = None
         self.z1 = None
@@ -45,92 +46,98 @@ class FaceDetection(Node):
         self.sub1 = self.create_subscription(
             msg_Image, "/camera/color/image_raw", self.get_latest_frame, 1
         )
-        
-    def face_detection(self):
-        ap = argparse.ArgumentParser()
-        ap.add_argument("-p", "--shape-predictor", required=True,
-            help="path to facial landmark predictor")
-        ap.add_argument("-r", "--picamera", type=int, default=-1,
-            help="whether or not the Raspberry Pi camera should be used")
-        args = vars(ap.parse_args())
+        self.depth_publisher = self.create_publisher(msg_Image, "/depth_mask", qos_profile=10
+        )
+        #create a timer
+        self.declare_parameter("frequency", 100.0)
+        self.frequency = self.get_parameter("frequency").get_parameter_value().double_value
+        self.timer = self.create_timer(1/self.frequency, self.timer_callback)
 
+        #argument parser
+        # self.ap = argparse.ArgumentParser()
+        # self.ap.add_argument("-p", "--shape-predictor", required=True,
+        #     help="path to facial landmark predictor")
+        # self.ap.add_argument("-r", "--picamera", type=int, default=-1,
+        #     help="whether or not the Raspberry Pi camera should be used")
+        # self.args = vars(self.ap.parse_args())
+
+        #define the facial landmark predictor and detector
         print("[INFO] loading facial landmark predictor...")
-        detector = dlib.get_frontal_face_detector()
-        predictor = dlib.shape_predictor(args["shape_predictor"])
+        package_share_directory = get_package_share_directory('face_recognition_ros_node')
+        shape_predictor_path = os.path.join(package_share_directory, 'faceshape_predictor_68_face_landmarks.dat')
+        self.predictor = dlib.shape_predictor(shape_predictor_path)
+        self.detector = dlib.get_frontal_face_detector()
+        # self.predictor = dlib.shape_predictor(self.args["shape_predictor"])
 
         # Initialize camera
-        pipeline = rs.pipeline()
-        config = rs.config()
-        config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+        self.pipeline = rs.pipeline()
+        self.config = rs.config()
+        self.config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
 
         # Start streaming
-        pipeline.start(config)
-        fps = FPS().start()
+        self.pipeline.start(self.config)
+        self.fps = FPS().start()
         time.sleep(2.0)
 
-        try:
-            while True:
-                # Wait for a coherent pair of frames: depth and color
-                frames = pipeline.wait_for_frames()
-                color_frame = frames.get_color_frame()
-                if not color_frame:
-                    continue
+    def timer_callback(self):
+            # Wait for a coherent pair of frames: depth and color
+        # frames = self.pipeline.wait_for_frames()
+        color_frame = self._latest_color_img
+        if not color_frame:
+            self.get_logger().info('No frame received, skipping...')
+            return  # Skip the current iteration if frame is None or invalid
 
-                # Convert images to numpy arrays
-                color_image = np.asanyarray(color_frame.get_data())
 
-                # Use imutils to perform image processing, e.g., resizing
-                color_image = imutils.resize(color_image, width=450)
-                gray = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
+        # Convert images to numpy arrays
+        color_image = np.asanyarray(color_frame.get_data())
 
-                rects = detector(gray, 0)
+        # Use imutils to perform image processing, e.g., resizing
+        color_image = imutils.resize(color_image, width=450)
+        gray = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
 
-                for rect in rects:
-                    shape = predictor(gray, rect)
-                    shape = face_utils.shape_to_np(shape)
-                                # Extract lips points
-                    upper_lip_outer = shape[48:55]
-                    upper_lip_inner = shape[60:65]
-                    lower_lip_outer = shape[54:60]
-                    lower_lip_inner = shape[64:68]
-                    self.inital_lips_points = upper_lip_outer #just for first testing
+        rects = self.detector(gray, 0)
 
-                    # Example: Draw the lips points
-                    for (x, y) in upper_lip_outer:
-                        cv2.circle(color_image, (x, y), 1, (0, 255, 0), -1)  # Green
-                    for (x, y) in upper_lip_inner:
-                        cv2.circle(color_image, (x, y), 1, (255, 0, 0), -1)  # Blue
-                    for (x, y) in lower_lip_outer:
-                        cv2.circle(color_image, (x, y), 1, (0, 255, 0), -1)  # Green
-                    for (x, y) in lower_lip_inner:
-                        cv2.circle(color_image, (x, y), 1, (255, 0, 0), -1)  
-                    # for (x, y) in shape:
-                    #     cv2.circle(color_image, (x, y), 1, (0, 0, 255), -1)
+        for rect in rects:
+            shape = self.predictor(gray, rect)
+            shape = face_utils.shape_to_np(shape)
+                        # Extract lips points
+            upper_lip_outer = shape[48:55]
+            upper_lip_inner = shape[60:65]
+            lower_lip_outer = shape[54:60]
+            lower_lip_inner = shape[64:68]
+            self.inital_lips_points = upper_lip_outer #just for first testing
 
-                # Show images
-                cv2.imshow('RealSense', color_image)
-                fps.update()
-                
-                #using the lips points to get the first set of xy in upper lips in the world frame
-                #just for 1 point now!
-                if self.inital_lips_points:
-                    x1, y1, z1 = self.depth_world(self.inital_lips_points[0][0], self.inital_lips_points[0][1])
-                    self.x1 = x1   
-                    self.y1 = y1
-                    self.z1 = z1
-                    print(f"X: {x1}, Y: {y1}, Z: {z1}")
-                    self.lip_pose_pub.publish(Point(x=x1, y=y1, z=z1))
+            # Example: Draw the lips points
+            for (x, y) in upper_lip_outer:
+                cv2.circle(color_image, (x, y), 1, (0, 255, 0), -1)  # Green
+            for (x, y) in upper_lip_inner:
+                cv2.circle(color_image, (x, y), 1, (255, 0, 0), -1)  # Blue
+            for (x, y) in lower_lip_outer:
+                cv2.circle(color_image, (x, y), 1, (0, 255, 0), -1)  # Green
+            for (x, y) in lower_lip_inner:
+                cv2.circle(color_image, (x, y), 1, (255, 0, 0), -1)
+            self.depth_publisher.publish(self.bridge.cv2_to_imgmsg(color_image,))  
+            # for (x, y) in shape:
+            #     cv2.circle(color_image, (x, y), 1, (0, 0, 255), -1)
 
-                # Break loop on 'q'
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
+        # Show images
+        # cv2.imshow('RealSense', color_image)
+        self.fps.update()
+        
+        #using the lips points to get the first set of xy in upper lips in the world frame
+        #just for 1 point now!
+        if self.inital_lips_points:
+            x1, y1, z1 = self.depth_world(self.inital_lips_points[0][0], self.inital_lips_points[0][1])
+            self.x1 = x1   
+            self.y1 = y1
+            self.z1 = z1
+            print(f"X: {x1}, Y: {y1}, Z: {z1}")
+            self.lip_pose_pub.publish(Point(x=x1, y=y1, z=z1))
 
-        finally:
-            # Stop streaming
-            pipeline.stop()
-            fps.stop()
-            print("[INFO] approx. FPS: {:.2f}".format(fps.fps()))
-
+        # Break loop on 'q'
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            self.timer.cancel()  # Optionally cancel the timer
+            return
 
 
 
@@ -216,14 +223,14 @@ class FaceDetection(Node):
             self._latest_depth_img = cv_image
         except CvBridgeError as e:
             print(e)
-            return
+            return    
         except ValueError as e:
             print(e)
             return
 
-
     def get_latest_frame(self, data):
         """
+        # Other resource cleanup if needed
         Call for the latest color image.
 
         Args:
@@ -245,13 +252,24 @@ class FaceDetection(Node):
         except ValueError as e:
             print(e)
             return
+        
+    def cleanup(self):
+        self.pipeline.stop()
+        self.fps.stop()
+        # Other resource cleanup if needed
 
 def main():
     rclpy.init()
-
     face_detection = FaceDetection()
 
-    rclpy.spin(face_detection)
+    try:
+        rclpy.spin(face_detection)
+    except KeyboardInterrupt:
+        pass  # Handle Ctrl+C here if needed
+    finally:
+        # Stop streaming and other cleanup
+        face_detection.cleanup()
+        rclpy.shutdown()
 
     rclpy.shutdown()
 

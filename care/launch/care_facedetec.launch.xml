@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <launch>
-
+    
     <node pkg="care" exec="care" />
 
-    <node pkg="face_recognition_ros_node" exec="Face_detection"/>
-
+    <node pkg="face_recognition_ros_node" exec="Face_detection">
+    </node>
 </launch> 
