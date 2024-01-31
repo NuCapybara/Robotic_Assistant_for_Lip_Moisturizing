@@ -9,17 +9,23 @@ import time
 import dlib
 import cv2
 import pyrealsense2 as rs
+import copy
 import numpy as np
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image as msg_Image
 from sensor_msgs.msg import CameraInfo
 from geometry_msgs.msg import Point
 
-bridge = CvBridge()
+
 class FaceDetection(Node):
 
     def __init__(self):
         super().__init__('face_detection')
+        self.bridge = CvBridge()
+        self._depth_image_topic = (
+            "camera/aligned_depth_to_color/image_raw"
+        )
+        self._depth_info_topic = "/camera/depth/camera_info"
         self.inital_lips_points = None #only for upper lip points now
         self._latest_depth_img = None
         self._latest_color_img = None
@@ -39,7 +45,7 @@ class FaceDetection(Node):
         self.sub1 = self.create_subscription(
             msg_Image, "/camera/color/image_raw", self.get_latest_frame, 1
         )
-
+        
     def face_detection(self):
         ap = argparse.ArgumentParser()
         ap.add_argument("-p", "--shape-predictor", required=True,
@@ -243,9 +249,9 @@ class FaceDetection(Node):
 def main():
     rclpy.init()
 
-    minimal_service = FaceDetection()
+    face_detection = FaceDetection()
 
-    rclpy.spin(minimal_service)
+    rclpy.spin(face_detection)
 
     rclpy.shutdown()
 
