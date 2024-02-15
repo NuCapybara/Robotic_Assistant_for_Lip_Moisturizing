@@ -1,0 +1,8 @@
+<launch>
+    <node pkg="hello_moveit" exec="hello_moveit">
+        <!-- <remap from="wx200/robot_description" to="robot_description"/> -->
+        <remap from="robot_description" to="/wx200/robot_description"/>
+        <remap from="joint_states" to="wx200/joint_states"/>
+        <param from="$(find-pkg-share hello_moveit)/config/kinematics.yaml" />
+    </node>
+</launch>

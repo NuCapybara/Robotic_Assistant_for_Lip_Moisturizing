@@ -1,0 +1,13 @@
+<launch>
+
+    <arg name="hardware_type" default="fake" description="use fake controller for robot arm" />
+    <arg name="use_rviz" default="true" description="display custom rviz robot viewer" />
+
+    <include file="$(find-pkg-share interbotix_xsarm_moveit)/launch/xsarm_moveit.launch.py">
+        <arg name="robot_model" value="wx200" />
+        <arg name="hardware_type" value="$(var hardware_type)" />
+        <arg name="publish_robot_description_semantic" value="True" />
+        <arg name="use_world_frame" value="true"/>
+    </include>
+
+</launch>
