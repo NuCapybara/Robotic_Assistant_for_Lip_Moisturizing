@@ -28,6 +28,11 @@ ros2 launch care care_facedetec.launch.xml
 
 ```
 
+```
+ros2 launch interbotix_xsarm_moveit xsarm_moveit.launch.py robot_model:=wx200 hardware_type:=fake 
+
+```
+
 ## Reference
 
 ```https://github.com/ostadabbas/3d-facial-landmark-detection-and-tracking/blob/master/face_landmark_detection.py```
