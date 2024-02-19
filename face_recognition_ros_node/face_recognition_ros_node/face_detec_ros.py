@@ -76,17 +76,25 @@ class FaceDetection(Node):
         self.detector = dlib.get_frontal_face_detector()
         # self.predictor = dlib.shape_predictor(self.args["shape_predictor"])
 
+        # Initialize camera
+        # self.pipeline = rs.pipeline()
+        self.config = rs.config()
+        self.config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+
+        # Start streaming
+        # self.pipeline.start(self.config)
         self.fps = FPS().start()
         time.sleep(2.0)
 
     def timer_callback(self):
         # Wait for a coherent pair of frames: depth and color
+        # frames = self.pipeline.wait_for_frames()
         color_frame = self._latest_color_img
         if color_frame is None:
             self.get_logger().info("No frame received, skipping...")
-            return 
-        # Use imutils to perform image processing, e.g., resizing
-        # color_image = imutils.resize(color_frame, width=450)
+            return  # Skip the current iteration if frame is None or invalid
+
+        # # Use imutils to perform image processing, e.g., resizing
         color_image = imutils.resize(color_frame, width=450)
         gray = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
 
@@ -133,7 +141,6 @@ class FaceDetection(Node):
                     f"Real world coordinates x: {x1}, y: {y1}, z: {z1}"
                 )
                 self.lip_pose_pub.publish(Point(x=x1, y=y1, z=z1))
-
         # Break loop on 'q'
         if cv2.waitKey(1) & 0xFF == ord("q"):
             self.timer.cancel()  # Optionally cancel the timer
@@ -153,22 +160,19 @@ class FaceDetection(Node):
             Tuple[float, float, float]: Real-world coordinates (x, y, z).
 
         """
-
+        
         if (
             self.intrinsics
             and self._latest_depth_img is not None
             and self._latest_color_img is not None
         ):
 
-            # self.get_logger().info("processing request")
-
             depth_x = int(x)
             depth_y = int(y)
             depth = self._latest_depth_img[depth_x, depth_y]
-
-            # self.get_logger().info(f"!!!!Depth at ({depth_x}, {depth_y}): {depth} in pixel")
+            
             result = rs.rs2_deproject_pixel_to_point(self.intrinsics, [y, x], depth)
-            self.get_logger().info(self.intrinsics)
+            print(self.intrinsics)
             x_new, y_new, z_new = result[0], result[1], result[2]
 
             return x_new, y_new, z_new
@@ -189,19 +193,13 @@ class FaceDetection(Node):
         try:
             if self.intrinsics:
                 return
-
             self.intrinsics = rs.intrinsics()
-
             self.intrinsics.width = cameraInfo.width
             self.intrinsics.height = cameraInfo.height
             self.intrinsics.ppx = cameraInfo.k[2]
             self.intrinsics.ppy = cameraInfo.k[5]
             self.intrinsics.fx = cameraInfo.k[0]
             self.intrinsics.fy = cameraInfo.k[4]
-            # got width 1280 height 720
-            self.get_logger().info(
-                f"Intrinsics: width={self.intrinsics.width}, height={self.intrinsics.height}"
-            )
             if cameraInfo.distortion_model == "plumb_bob":
                 self.intrinsics.model = rs.distortion.brown_conrady
             elif cameraInfo.distortion_model == "equidistant":
@@ -224,9 +222,10 @@ class FaceDetection(Node):
             None
 
         """
+
         try:
+
             cv_image = self.bridge.imgmsg_to_cv2(data, data.encoding)
-            # self.get_logger().info(str(type(cv_image)))
             self._latest_depth_img = cv_image
         except CvBridgeError as e:
             self.get_logger().error("CvBridgeError in imageDepthCallback: {}".format(e))
