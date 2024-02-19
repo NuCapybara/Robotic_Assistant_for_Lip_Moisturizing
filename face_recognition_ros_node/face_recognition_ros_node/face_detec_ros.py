@@ -47,6 +47,11 @@ class FaceDetection(Node):
         self.depth_publisher = self.create_publisher(
             msg_Image, "/depth_mask", qos_profile=10
         )
+
+        self.original_publisher = self.create_publisher(
+            msg_Image, "/original_mask", qos_profile=10
+        )
+
         # create a timer
         self.declare_parameter("frequency", 100.0)
         self.frequency = (
@@ -86,6 +91,12 @@ class FaceDetection(Node):
         self.fps = FPS().start()
         time.sleep(2.0)
 
+
+
+        # DEBUG PROCESS
+        # Original width and height
+        self.scale_factor = 0.0
+
     def timer_callback(self):
         # Wait for a coherent pair of frames: depth and color
         # frames = self.pipeline.wait_for_frames()
@@ -111,20 +122,28 @@ class FaceDetection(Node):
             self.inital_lips_points = upper_lip_outer  # just for first testing
 
             # Example: Draw the lips points
-            for x, y in upper_lip_outer:
-                cv2.circle(color_image, (x, y), 1, (0, 255, 0), -1)  # Green
-            for x, y in upper_lip_inner:
-                cv2.circle(color_image, (x, y), 1, (255, 0, 0), -1)  # Blue
-            for x, y in lower_lip_outer:
-                cv2.circle(color_image, (x, y), 1, (0, 255, 0), -1)  # Green
-            for x, y in lower_lip_inner:
-                cv2.circle(color_image, (x, y), 1, (255, 0, 0), -1)
+            # for x, y in upper_lip_outer:
+            #     cv2.circle(color_image, (x, y), 1, (0, 255, 0), -1)  # Green
+            # for x, y in upper_lip_inner:
+            #     cv2.circle(color_image, (x, y), 1, (255, 0, 0), -1)  # Blue
+            # for x, y in lower_lip_outer:
+            #     cv2.circle(color_image, (x, y), 1, (0, 255, 0), -1)  # Green
+            # for x, y in lower_lip_inner:
+            #     cv2.circle(color_image, (x, y), 1, (255, 0, 0), -1)
+
+            cv2.circle(color_image, (self.inital_lips_points[0][0], self.inital_lips_points[0][1]), 1, (0, 0, 255), -1)  # DEBUG RED
+
+            
             self.depth_publisher.publish(self.bridge.cv2_to_imgmsg(color_image))
-            # for (x, y) in shape:
-            #     cv2.circle(color_image, (x, y), 1, (0, 0, 255), -1)
+
+            #DEBUG: Draw the lips point on the original image    
+            for x, y in upper_lip_outer:
+                original_x = x * self.scale_factor
+                original_y = y * self.scale_factor
+                cv2.circle(self._latest_color_img, (int(original_x), int(original_y)), 1, (0, 255, 0), -1)  # Green
+            self.original_publisher.publish(self.bridge.cv2_to_imgmsg(self._latest_color_img))
 
         # Show images
-        # cv2.imshow('RealSense', color_image)
         self.fps.update()
 
         # using the lips points to get the first set of xy in upper lips in the world frame
@@ -137,9 +156,9 @@ class FaceDetection(Node):
             self.y1 = y1
             self.z1 = z1
             if self.x1 != 0.0 and self.y1 != 0.0 and self.z1 != 0.0:
-                self.get_logger().info(
-                    f"Real world coordinates x: {x1}, y: {y1}, z: {z1}"
-                )
+                # self.get_logger().info(
+                #     f"Real world coordinates x: {x1}, y: {y1}, z: {z1}"
+                # )
                 self.lip_pose_pub.publish(Point(x=x1, y=y1, z=z1))
         # Break loop on 'q'
         if cv2.waitKey(1) & 0xFF == ord("q"):
@@ -205,6 +224,9 @@ class FaceDetection(Node):
             elif cameraInfo.distortion_model == "equidistant":
                 self.intrinsics.model = rs.distortion.kannala_brandt4
             self.intrinsics.coeffs = [i for i in cameraInfo.d]
+
+            #DEBUG
+            self.scale_factor = self.intrinsics.width / 450
         except CvBridgeError as e:
             print(e)
             return
