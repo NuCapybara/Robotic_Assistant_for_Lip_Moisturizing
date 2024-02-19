@@ -20,19 +20,29 @@ int main(int argc, char * argv[])
 using moveit::planning_interface::MoveGroupInterface;
 auto move_group_interface = MoveGroupInterface(node, "interbotix_arm");
 
+geometry_msgs::msg::Pose target_pose;
+target_pose.position.y = 0.0;
+target_pose.position.x = 0.0;
+target_pose.position.z = 0.48; ///0.48 for the maximum height singlely on z
+double z_angle = std::atan2(target_pose.position.y, target_pose.position.x);
+tf2::Quaternion target_q;
+// Here is the magic, the description of setEuler is mis-leading! 
+target_q.setEuler(0.0, 0.0, z_angle);
+
+target_pose.orientation.w = target_q.w();
+target_pose.orientation.x = target_q.x();
+target_pose.orientation.y = target_q.y();
+target_pose.orientation.z = target_q.z();
 // Set a target Pose
-auto const target_pose = []{
-  geometry_msgs::msg::Pose msg;
-  msg.orientation.w = 1.0;
-  msg.orientation.x = 0.0;
-  msg.orientation.y = 0.0;
-  msg.orientation.z = 0.0;
-  msg.position.x = 0.21;
-  msg.position.y = 0.5;
-  msg.position.z = 0.15803736261075846;
-  return msg;
-}();
+
 move_group_interface.setPoseTarget(target_pose);
+
+
+// // Set a target Position
+// double x = 0.21;
+// double y = 0.0;
+// double z = 0.15803736261075846;
+// move_group_interface.setPositionTarget(x ,y ,z);
 
 // // Create a plan to that target pose
 auto const [success, plan] = [&move_group_interface]{

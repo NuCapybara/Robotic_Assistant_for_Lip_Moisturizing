@@ -11,9 +11,9 @@ class Robot_Care(Node):
         self.lip_pose_test = None
 
     def pose_listener_callback(self, msg):
-        self.get_logger().info('I heard: "%s"' % msg)
+        # self.get_logger().info('I heard: "%s"' % msg)
         if self.lip_pose_test is not None:
-            self.get_logger().info('set lip_pose_test: "%s"' % self.lip_pose_test)
+            # self.get_logger().info('set lip_pose_test: "%s"' % self.lip_pose_test)
             self.lip_pose_test = [msg.x, msg.y, msg.z]
 
 def main(args=None):
