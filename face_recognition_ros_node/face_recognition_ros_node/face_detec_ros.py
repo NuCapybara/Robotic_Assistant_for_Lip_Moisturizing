@@ -17,7 +17,7 @@ from sensor_msgs.msg import Image as msg_Image
 from sensor_msgs.msg import CameraInfo
 from geometry_msgs.msg import Point
 from ament_index_python.packages import get_package_share_directory
-
+from tf2_ros import TransformBroadcaster
 
 class FaceDetection(Node):
     def __init__(self):
@@ -96,6 +96,8 @@ class FaceDetection(Node):
         # DEBUG PROCESS
         # Original width and height
         self.scale_factor = 0.0
+        self.original_x = 0.0
+        self.original_y = 0.0
 
     def timer_callback(self):
         # Wait for a coherent pair of frames: depth and color
@@ -138,27 +140,33 @@ class FaceDetection(Node):
 
             #DEBUG: Draw the lips point on the original image    
             for x, y in upper_lip_outer:
-                original_x = x * self.scale_factor
-                original_y = y * self.scale_factor
-                cv2.circle(self._latest_color_img, (int(original_x), int(original_y)), 1, (0, 255, 0), -1)  # Green
+                self.original_x = x * self.scale_factor
+                self.original_y = y * self.scale_factor
+                left_x = int(self.inital_lips_points[0][0] * self.scale_factor)
+                left_y = int(self.inital_lips_points[0][1] * self.scale_factor)
+                # cv2.circle(self._latest_color_img, (int(self.original_x), int(self.original_y)), 1, (0, 255, 0), -1)  # Green
+            cv2.circle(self._latest_color_img, (left_x, left_y), 1, (0, 255, 0), -1)  # DEBUG BLUE
             self.original_publisher.publish(self.bridge.cv2_to_imgmsg(self._latest_color_img))
-
+            
         # Show images
         self.fps.update()
 
         # using the lips points to get the first set of xy in upper lips in the world frame
         # just for 1 point now!
         if self.inital_lips_points is not None:
+            # x1, y1, z1 = self.depth_world(
+            #     self.inital_lips_points[0][0], self.inital_lips_points[0][1]
+            # )
             x1, y1, z1 = self.depth_world(
-                self.inital_lips_points[0][0], self.inital_lips_points[0][1]
+                left_x, left_y
             )
             self.x1 = x1
             self.y1 = y1
             self.z1 = z1
             if self.x1 != 0.0 and self.y1 != 0.0 and self.z1 != 0.0:
-                # self.get_logger().info(
-                #     f"Real world coordinates x: {x1}, y: {y1}, z: {z1}"
-                # )
+                self.get_logger().info(
+                    f"Real world coordinates x: {x1}, y: {y1}, z: {z1}"
+                )
                 self.lip_pose_pub.publish(Point(x=x1, y=y1, z=z1))
         # Break loop on 'q'
         if cv2.waitKey(1) & 0xFF == ord("q"):
@@ -188,10 +196,11 @@ class FaceDetection(Node):
 
             depth_x = int(x)
             depth_y = int(y)
-            depth = self._latest_depth_img[depth_x, depth_y]
-            
-            result = rs.rs2_deproject_pixel_to_point(self.intrinsics, [y, x], depth)
-            print(self.intrinsics)
+            self.get_logger().info(f"depth_x: {depth_x}, depth_y: {depth_y}")
+            # depth = self._latest_depth_img[depth_x, depth_y]
+            depth = self._latest_depth_img[depth_y, depth_x]
+            result = rs.rs2_deproject_pixel_to_point(self.intrinsics, [x, y], depth)
+
             x_new, y_new, z_new = result[0], result[1], result[2]
 
             return x_new, y_new, z_new
@@ -227,6 +236,7 @@ class FaceDetection(Node):
 
             #DEBUG
             self.scale_factor = self.intrinsics.width / 450
+            self.get_logger().info(f"intrinsics_width: {self.intrinsics.width}, depth_y: { self.intrinsics.height}")
         except CvBridgeError as e:
             print(e)
             return
