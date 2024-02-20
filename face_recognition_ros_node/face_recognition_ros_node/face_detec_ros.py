@@ -3,6 +3,7 @@ import os
 from rclpy.node import Node
 from imutils.video import FPS
 from imutils import face_utils
+import math
 import datetime
 import argparse
 import imutils
@@ -18,6 +19,7 @@ from sensor_msgs.msg import CameraInfo
 from geometry_msgs.msg import Point
 from ament_index_python.packages import get_package_share_directory
 from tf2_ros import TransformBroadcaster
+from geometry_msgs.msg import TransformStamped
 
 class FaceDetection(Node):
     def __init__(self):
@@ -34,6 +36,8 @@ class FaceDetection(Node):
         self.x1 = None
         self.y1 = None
         self.z1 = None
+        self.left_x = None
+        self.left_y = None
         self.lip_pose_pub = self.create_publisher(Point, "lip_pose", 10)
         self.sub_depth = self.create_subscription(
             msg_Image, self._depth_image_topic, self.imageDepthCallback, 1
@@ -51,6 +55,8 @@ class FaceDetection(Node):
         self.original_publisher = self.create_publisher(
             msg_Image, "/original_mask", qos_profile=10
         )
+        # Initialize the transform broadcaster
+        self.tf_broadcaster = TransformBroadcaster(self)
 
         # create a timer
         self.declare_parameter("frequency", 100.0)
@@ -98,6 +104,7 @@ class FaceDetection(Node):
         self.scale_factor = 0.0
         self.original_x = 0.0
         self.original_y = 0.0
+        
 
     def timer_callback(self):
         # Wait for a coherent pair of frames: depth and color
@@ -137,15 +144,14 @@ class FaceDetection(Node):
 
             
             self.depth_publisher.publish(self.bridge.cv2_to_imgmsg(color_image))
-
+            self.left_x = int(self.inital_lips_points[0][0] * self.scale_factor)
+            self.left_y = int(self.inital_lips_points[0][1] * self.scale_factor)
             #DEBUG: Draw the lips point on the original image    
             for x, y in upper_lip_outer:
                 self.original_x = x * self.scale_factor
                 self.original_y = y * self.scale_factor
-                left_x = int(self.inital_lips_points[0][0] * self.scale_factor)
-                left_y = int(self.inital_lips_points[0][1] * self.scale_factor)
                 # cv2.circle(self._latest_color_img, (int(self.original_x), int(self.original_y)), 1, (0, 255, 0), -1)  # Green
-            cv2.circle(self._latest_color_img, (left_x, left_y), 1, (0, 255, 0), -1)  # DEBUG BLUE
+            cv2.circle(self._latest_color_img, (self.left_x, self.left_y), 1, (0, 255, 0), -1)  # DEBUG BLUE
             self.original_publisher.publish(self.bridge.cv2_to_imgmsg(self._latest_color_img))
             
         # Show images
@@ -153,12 +159,10 @@ class FaceDetection(Node):
 
         # using the lips points to get the first set of xy in upper lips in the world frame
         # just for 1 point now!
-        if self.inital_lips_points is not None:
-            # x1, y1, z1 = self.depth_world(
-            #     self.inital_lips_points[0][0], self.inital_lips_points[0][1]
-            # )
+        # if self.inital_lips_points is not None:
+        if self.left_x is not None and self.left_y is not None:
             x1, y1, z1 = self.depth_world(
-                left_x, left_y
+                self.left_x, self.left_y
             )
             self.x1 = x1
             self.y1 = y1
@@ -168,6 +172,7 @@ class FaceDetection(Node):
                     f"Real world coordinates x: {x1}, y: {y1}, z: {z1}"
                 )
                 self.lip_pose_pub.publish(Point(x=x1, y=y1, z=z1))
+                self.tf_broadcaster_func(x1, y1, z1, 0.0)
         # Break loop on 'q'
         if cv2.waitKey(1) & 0xFF == ord("q"):
             self.timer.cancel()  # Optionally cancel the timer
@@ -291,11 +296,55 @@ class FaceDetection(Node):
             print(e)
             return
 
-    # def cleanup(self):
-    #     self.pipeline.stop()
-    #     self.fps.stop()
-    #     # Other resource cleanup if needed
+    def quaternion_from_euler(ai, aj, ak):
+        ai /= 2.0
+        aj /= 2.0
+        ak /= 2.0
+        ci = math.cos(ai)
+        si = math.sin(ai)
+        cj = math.cos(aj)
+        sj = math.sin(aj)
+        ck = math.cos(ak)
+        sk = math.sin(ak)
+        cc = ci*ck
+        cs = ci*sk
+        sc = si*ck
+        ss = si*sk
 
+        q = np.empty((4, ))
+        q[0] = cj*sc - sj*cs
+        q[1] = cj*ss + sj*cc
+        q[2] = cj*cs - sj*sc
+        q[3] = cj*cc + sj*ss
+
+        return q
+    def tf_broadcaster_func(self, x, y, z, theta):
+        t = TransformStamped()
+
+        # Read message content and assign it to
+        # corresponding tf variables
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = 'camera_link'
+        t.child_frame_id = 'head_link'
+
+        # t.transform.translation.x = x/1000
+        # t.transform.translation.y = y/1000
+        # t.transform.translation.z = z/1000
+        
+        t.transform.translation.x = z/1000
+        t.transform.translation.y = -x/1000
+        t.transform.translation.z = -y/1000
+        # For the same reason, turtle can only rotate around one axis
+        # and this why we set rotation in x and y to 0 and obtain
+        # rotation in z axis from the message
+        q = FaceDetection.quaternion_from_euler(0, 0, theta)
+        t.transform.rotation.x = q[0]
+        t.transform.rotation.y = q[1]
+        t.transform.rotation.z = q[2]
+        t.transform.rotation.w = q[3]
+
+        # Send the transformation
+        self.tf_broadcaster.sendTransform(t)
 
 def main():
     rclpy.init()
