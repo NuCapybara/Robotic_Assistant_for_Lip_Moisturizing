@@ -1,63 +1,99 @@
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
 #include <moveit/move_group_interface/move_group_interface.h>
+#include <geometry_msgs/msg/pose.hpp>
+#include <tf2/LinearMath/Quaternion.h>
+#include <chrono>
+#include <cmath>
+#include <geometry_msgs/msg/point.hpp>
 
-int main(int argc, char * argv[])
-{
-  // Initialize ROS and create the Node
-  rclcpp::init(argc, argv);
-  auto const node = std::make_shared<rclcpp::Node>(
-    "hello_moveit",
-    rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true)
-  );
-
-  // Create a ROS logger
-  auto const logger = rclcpp::get_logger("hello_moveit");
-
-  // Next step goes here
-// // Create the MoveIt MoveGroup Interface
-///CAUSING PROBLEMS
 using moveit::planning_interface::MoveGroupInterface;
-auto move_group_interface = MoveGroupInterface(node, "interbotix_arm");
 
-geometry_msgs::msg::Pose target_pose;
-target_pose.position.y = 0.0;
-target_pose.position.x = 0.0;
-target_pose.position.z = 0.48; ///0.48 for the maximum height singlely on z
-double z_angle = std::atan2(target_pose.position.y, target_pose.position.x);
-tf2::Quaternion target_q;
-// Here is the magic, the description of setEuler is mis-leading! 
-target_q.setEuler(0.0, 0.0, z_angle);
+class CareMoveIt {
+public:
+    CareMoveIt(rclcpp::Node::SharedPtr node_ptr)
+    : node_ptr(node_ptr),
+      logger(node_ptr->get_logger()),
+      move_group_interface(MoveGroupInterface(node_ptr, "interbotix_arm"))
+    {
+         RCLCPP_INFO_STREAM(logger, "I am in the constructor");
+        // Parameter declaration
+        node_ptr->declare_parameter<double>("rate", 100.);
+        rate_hz = node_ptr->get_parameter("rate").as_double();
+        std::chrono::milliseconds rate = (std::chrono::milliseconds) ((int)(1000. / rate_hz));
+        lip_pose_subscriber = node_ptr->create_subscription<geometry_msgs::msg::Point>(
+            "lip_pose", 10,
+            std::bind(&CareMoveIt::plan_and_execute_cb, this,
+            std::placeholders::_1));
+    }
 
-target_pose.orientation.w = target_q.w();
-target_pose.orientation.x = target_q.x();
-target_pose.orientation.y = target_q.y();
-target_pose.orientation.z = target_q.z();
-// Set a target Pose
+private:
+    // void timer_callback() {
+    //     RCLCPP_INFO(logger, "Timer callback triggered");
+    //     plan_and_execute();
+    // }
 
-move_group_interface.setPoseTarget(target_pose);
+    void plan_and_execute_cb(const geometry_msgs::msg::Point &point_msg) {
+        RCLCPP_INFO_STREAM(logger, "I RECEIVED MSG" << " "<< point_msg.x << " " << point_msg.y << " " << point_msg.z);
+        geometry_msgs::msg::Pose target_pose;
 
+        // target_pose.position.x = point_msg.x;
+        // target_pose.position.y = point_msg.y;
+        // target_pose.position.z = point_msg.z;
+        if(point_msg.z > 0.4){
+            target_pose.position.x = 0.35;
+        }
+        else{
+            target_pose.position.x = point_msg.z/1000;
+        }
+        target_pose.position.y = -point_msg.x/1000 - 0.16;
+        target_pose.position.z = -point_msg.y/1000 + 0.25;
+        RCLCPP_INFO_STREAM(logger, "robot command" << " x "<< target_pose.position.x << " y " << target_pose.position.y << " z " << target_pose.position.z);
 
-// // Set a target Position
-// double x = 0.21;
-// double y = 0.0;
-// double z = 0.15803736261075846;
-// move_group_interface.setPositionTarget(x ,y ,z);
+        // target_pose.position.x = 0.0;
+        // target_pose.position.y = 0.0;
+        // target_pose.position.z = 0.48; // Maximum height on zour
 
-// // Create a plan to that target pose
-auto const [success, plan] = [&move_group_interface]{
-  moveit::planning_interface::MoveGroupInterface::Plan msg;
-  auto const ok = static_cast<bool>(move_group_interface.plan(msg));
-  return std::make_pair(ok, msg);
-}();
+        double z_angle = std::atan2(target_pose.position.y, target_pose.position.x);
+        tf2::Quaternion target_q;
+        target_q.setRPY(0.0, 0.0, z_angle); // Set Euler angles
 
-// Execute the plan
-if(success) {
-  move_group_interface.execute(plan);
-} else {
-  RCLCPP_ERROR(logger, "Planning failed!");
-}
-  // Shutdown ROS
-  rclcpp::shutdown();
-  return 0;
+        target_pose.orientation.x = target_q.x();
+        target_pose.orientation.y = target_q.y();
+        target_pose.orientation.z = target_q.z();
+        target_pose.orientation.w = target_q.w();
+
+        move_group_interface.setPoseTarget(target_pose);
+
+        // Planning and execution
+        moveit::planning_interface::MoveGroupInterface::Plan msg;
+        auto const success = static_cast<bool>(move_group_interface.plan(msg));
+        auto const plan = msg;
+
+        // Execute the plan
+        if(success) {
+            move_group_interface.execute(plan);
+        } else {
+            RCLCPP_ERROR(logger, "Planning failed!");
+        }
+    }
+
+    rclcpp::Node::SharedPtr node_ptr;
+    rclcpp::TimerBase::SharedPtr timer_;
+    double rate_hz;
+    rclcpp::Logger logger;
+    moveit::planning_interface::MoveGroupInterface move_group_interface;
+    rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr lip_pose_subscriber;
+};
+
+int main(int argc, char* argv[]) {
+    rclcpp::init(argc, argv);
+    auto const node = std::make_shared<rclcpp::Node>(
+        "hello_moveit",
+        rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(
+            true));
+    auto const hello_moveit = std::make_shared<CareMoveIt>(node);
+    rclcpp::spin(node);
+    rclcpp::shutdown();
+    return 0;
 }

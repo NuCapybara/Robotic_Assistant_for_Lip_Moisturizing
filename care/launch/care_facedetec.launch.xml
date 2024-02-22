@@ -6,5 +6,5 @@
     <node pkg="face_recognition_ros_node" exec="Face_detection">
     </node>
 
-    <node pkg="rviz2" exec="rviz2"/>
+    <!-- <node pkg="rviz2" exec="rviz2"/> -->
 </launch> 

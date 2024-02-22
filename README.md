@@ -6,32 +6,32 @@
 The project is depended on realsense camera, to start, you could run the following command
 
 run first line in one terminal
-```
-realsense-viewer
-```
 
-run second line in the seperate terminal
-```
-ros2 launch realsense2_camera rs_launch.py depth_module.profile:=1280x720x30 pointcloud.enable:=true
-```
 
 ```
-ros2 launch ros_april_tag detect_tag.launch.xml
-```
+First step:
 
 ```
-python video_facial_landmarks.py \--shape-predictor shape_predictor_68_face_landmarks.dat
+ros2 launch hello_moveit moveit.launch.xml hardware_type:=actual
 ```
+Second: 
 
 ```
-ros2 launch care care_facedetec.launch.xml
+ ros2 launch realsense2_camera rs_launch.py depth_module.profile:=1280x720x30 pointcloud.enable:=true align_depth.enable:=true
+```
+
+Third step acticvate the face detection node and publish the transform from camera to robot
+
+```
+ ros2 launch care care_facedetec.launch.xml
 
 ```
 
+Fourth step runs the moveit group command:
 ```
-ros2 launch interbotix_xsarm_moveit xsarm_moveit.launch.py robot_model:=wx200 hardware_type:=fake 
+ros2 launch hello_moveit hello_moveit.launch.xml
+```
 
-```
 
 ## Reference
 

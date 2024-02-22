@@ -19,6 +19,7 @@ from sensor_msgs.msg import CameraInfo
 from geometry_msgs.msg import Point
 from ament_index_python.packages import get_package_share_directory
 from tf2_ros import TransformBroadcaster
+from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 from geometry_msgs.msg import TransformStamped
 
 class FaceDetection(Node):
@@ -57,6 +58,8 @@ class FaceDetection(Node):
         )
         # Initialize the transform broadcaster
         self.tf_broadcaster = TransformBroadcaster(self)
+        self.tf_static_broadcaster = StaticTransformBroadcaster(self)
+        self.make_transforms()
 
         # create a timer
         self.declare_parameter("frequency", 100.0)
@@ -65,13 +68,6 @@ class FaceDetection(Node):
         )
         self.timer = self.create_timer(1 / self.frequency, self.timer_callback)
 
-        # argument parser
-        # self.ap = argparse.ArgumentParser()
-        # self.ap.add_argument("-p", "--shape-predictor", required=True,
-        #     help="path to facial landmark predictor")
-        # self.ap.add_argument("-r", "--picamera", type=int, default=-1,
-        #     help="whether or not the Raspberry Pi camera should be used")
-        # self.args = vars(self.ap.parse_args())
 
         # define the facial landmark predictor and detector
         print("[INFO] loading facial landmark predictor...")
@@ -104,6 +100,7 @@ class FaceDetection(Node):
         self.scale_factor = 0.0
         self.original_x = 0.0
         self.original_y = 0.0
+        
         
 
     def timer_callback(self):
@@ -161,6 +158,9 @@ class FaceDetection(Node):
         # just for 1 point now!
         # if self.inital_lips_points is not None:
         if self.left_x is not None and self.left_y is not None:
+            # self.get_logger().info(
+            #     f"left x: {self.left_x}, left y: {self.left_y}"
+            # )
             x1, y1, z1 = self.depth_world(
                 self.left_x, self.left_y
             )
@@ -168,9 +168,9 @@ class FaceDetection(Node):
             self.y1 = y1
             self.z1 = z1
             if self.x1 != 0.0 and self.y1 != 0.0 and self.z1 != 0.0:
-                self.get_logger().info(
-                    f"Real world coordinates x: {x1}, y: {y1}, z: {z1}"
-                )
+                # self.get_logger().info(
+                #     f"Real world coordinates x: {x1}, y: {y1}, z: {z1}"
+                # )
                 self.lip_pose_pub.publish(Point(x=x1, y=y1, z=z1))
                 self.tf_broadcaster_func(x1, y1, z1, 0.0)
         # Break loop on 'q'
@@ -192,7 +192,9 @@ class FaceDetection(Node):
             Tuple[float, float, float]: Real-world coordinates (x, y, z).
 
         """
-        
+        # self.get_logger().info(f"i went in depth_world function!!!!")
+        # received = (self._latest_depth_img)
+        # self.get_logger().info(f"received: {received}")
         if (
             self.intrinsics
             and self._latest_depth_img is not None
@@ -201,7 +203,7 @@ class FaceDetection(Node):
 
             depth_x = int(x)
             depth_y = int(y)
-            self.get_logger().info(f"depth_x: {depth_x}, depth_y: {depth_y}")
+            # self.get_logger().info(f"depth_x: {depth_x}, depth_y: {depth_y}")
             # depth = self._latest_depth_img[depth_x, depth_y]
             depth = self._latest_depth_img[depth_y, depth_x]
             result = rs.rs2_deproject_pixel_to_point(self.intrinsics, [x, y], depth)
@@ -345,6 +347,26 @@ class FaceDetection(Node):
 
         # Send the transformation
         self.tf_broadcaster.sendTransform(t)
+    
+
+    #define static transform broadcaster
+    def make_transforms(self):
+        tran = TransformStamped()
+
+        tran.header.stamp = self.get_clock().now().to_msg()
+        tran.header.frame_id = 'wx200/base_link'
+        tran.child_frame_id = 'camera_link'
+
+        tran.transform.translation.x = 0.0
+        tran.transform.translation.y = -0.155
+        tran.transform.translation.z = 0.16
+        quat = FaceDetection.quaternion_from_euler(0, 0, 0)
+        tran.transform.rotation.x = quat[0]
+        tran.transform.rotation.y = quat[1]
+        tran.transform.rotation.z = quat[2]
+        tran.transform.rotation.w = quat[3]
+
+        self.tf_static_broadcaster.sendTransform(tran)
 
 def main():
     rclpy.init()
