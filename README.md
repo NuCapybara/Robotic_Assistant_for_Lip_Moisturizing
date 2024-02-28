@@ -8,7 +8,6 @@ The project is depended on realsense camera, to start, you could run the followi
 run first line in one terminal
 
 
-```
 First step:
 
 ```
@@ -36,3 +35,8 @@ ros2 launch hello_moveit hello_moveit.launch.xml
 ## Reference
 
 ```https://github.com/ostadabbas/3d-facial-landmark-detection-and-tracking/blob/master/face_landmark_detection.py```
+
+
+```
+ros2 run tf2_ros static_transform_publisher --x 0 --y 0 --z 0 --qx 0 --qy 0 --qz 0 --qw 1 --frame-id "wx200/base_link" --child-frame-id "camera_link"
+```

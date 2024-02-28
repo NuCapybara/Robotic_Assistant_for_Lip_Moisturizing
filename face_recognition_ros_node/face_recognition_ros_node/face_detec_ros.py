@@ -148,7 +148,7 @@ class FaceDetection(Node):
                 self.original_x = x * self.scale_factor
                 self.original_y = y * self.scale_factor
                 # cv2.circle(self._latest_color_img, (int(self.original_x), int(self.original_y)), 1, (0, 255, 0), -1)  # Green
-            cv2.circle(self._latest_color_img, (self.left_x, self.left_y), 1, (0, 255, 0), -1)  # DEBUG BLUE
+            cv2.circle(self._latest_color_img, (self.left_x, self.left_y), 1, (0, 255, 0), -1)  # DEBUG GREEN
             self.original_publisher.publish(self.bridge.cv2_to_imgmsg(self._latest_color_img))
             
         # Show images
@@ -195,6 +195,9 @@ class FaceDetection(Node):
         # self.get_logger().info(f"i went in depth_world function!!!!")
         # received = (self._latest_depth_img)
         # self.get_logger().info(f"received: {received}")
+        # self.get_logger().info(f"i went in depth_world function!!!!")
+        # received = (self._latest_depth_img)
+        # self.get_logger().info(f"received: {received}")
         if (
             self.intrinsics
             and self._latest_depth_img is not None
@@ -203,6 +206,8 @@ class FaceDetection(Node):
 
             depth_x = int(x)
             depth_y = int(y)
+            
+            
             # self.get_logger().info(f"depth_x: {depth_x}, depth_y: {depth_y}")
             # depth = self._latest_depth_img[depth_x, depth_y]
             depth = self._latest_depth_img[depth_y, depth_x]
@@ -329,6 +334,8 @@ class FaceDetection(Node):
         t.header.frame_id = 'camera_link'
         t.child_frame_id = 'head_link'
 
+        
+
         # t.transform.translation.x = x/1000
         # t.transform.translation.y = y/1000
         # t.transform.translation.z = z/1000
@@ -336,6 +343,8 @@ class FaceDetection(Node):
         t.transform.translation.x = z/1000
         t.transform.translation.y = -x/1000
         t.transform.translation.z = -y/1000
+
+        self.get_logger().info(f"translation.x: {t.transform.translation.x}, translation.y: {t.transform.translation.y}, translation.z: {t.transform.translation.z}")
         # For the same reason, turtle can only rotate around one axis
         # and this why we set rotation in x and y to 0 and obtain
         # rotation in z axis from the message
@@ -356,10 +365,13 @@ class FaceDetection(Node):
         tran.header.stamp = self.get_clock().now().to_msg()
         tran.header.frame_id = 'wx200/base_link'
         tran.child_frame_id = 'camera_link'
-
-        tran.transform.translation.x = 0.0
-        tran.transform.translation.y = -0.155
-        tran.transform.translation.z = 0.16
+        
+        # tran.transform.translation.x = 0.0
+        tran.transform.translation.x = 0.015
+        # tran.transform.translation.y = -0.155
+        tran.transform.translation.y = -0.165
+        # tran.transform.translation.z = 0.16
+        tran.transform.translation.z = 0.175
         quat = FaceDetection.quaternion_from_euler(0, 0, 0)
         tran.transform.rotation.x = quat[0]
         tran.transform.rotation.y = quat[1]

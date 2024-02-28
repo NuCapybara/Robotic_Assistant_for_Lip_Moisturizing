@@ -6,6 +6,8 @@
 #include <chrono>
 #include <cmath>
 #include <geometry_msgs/msg/point.hpp>
+#include "tf2/LinearMath/Quaternion.h"
+#include "tf2_ros/static_transform_broadcaster.h"
 
 using moveit::planning_interface::MoveGroupInterface;
 
@@ -44,10 +46,10 @@ private:
             target_pose.position.x = 0.35;
         }
         else{
-            target_pose.position.x = point_msg.z/1000;
+            target_pose.position.x = point_msg.z/1000 + 0.015;
         }
-        target_pose.position.y = -point_msg.x/1000 - 0.16;
-        target_pose.position.z = -point_msg.y/1000 + 0.25;
+        target_pose.position.y = -point_msg.x/1000 - 0.165;
+        target_pose.position.z = -point_msg.y/1000 + 0.175;
         RCLCPP_INFO_STREAM(logger, "robot command" << " x "<< target_pose.position.x << " y " << target_pose.position.y << " z " << target_pose.position.z);
 
         // target_pose.position.x = 0.0;
@@ -76,6 +78,20 @@ private:
         } else {
             RCLCPP_ERROR(logger, "Planning failed!");
         }
+
+        // geometry_msgs::msg::TransformStamped t;
+
+        // t.header.stamp = node_ptr->get_clock()->now();
+        // t.header.frame_id = "wx200/base_link";
+        // t.child_frame_id = "motion_target";
+        // t.transform.translation.x = target_pose.position.x;
+        // t.transform.translation.y = target_pose.position.y;
+        // t.transform.translation.z = target_pose.position.z;
+        // t.transform.rotation.x = target_pose.orientation.x;
+        // t.transform.rotation.y = target_pose.orientation.y;
+        // t.transform.rotation.z = target_pose.orientation.z;
+        // t.transform.rotation.w = target_pose.orientation.w;
+        
     }
 
     rclcpp::Node::SharedPtr node_ptr;
@@ -84,6 +100,7 @@ private:
     rclcpp::Logger logger;
     moveit::planning_interface::MoveGroupInterface move_group_interface;
     rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr lip_pose_subscriber;
+    
 };
 
 int main(int argc, char* argv[]) {
