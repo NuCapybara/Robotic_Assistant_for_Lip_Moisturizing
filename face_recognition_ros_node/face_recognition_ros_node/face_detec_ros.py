@@ -1,4 +1,5 @@
 import rclpy
+import collections
 import os
 from rclpy.node import Node
 from imutils.video import FPS
@@ -12,6 +13,7 @@ import dlib
 import cv2
 import pyrealsense2 as rs
 import copy
+import functools
 import numpy as np
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image as msg_Image
@@ -21,6 +23,8 @@ from ament_index_python.packages import get_package_share_directory
 from tf2_ros import TransformBroadcaster
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 from geometry_msgs.msg import TransformStamped
+
+from image_geometry import PinholeCameraModel
 
 class FaceDetection(Node):
     def __init__(self):
@@ -39,6 +43,14 @@ class FaceDetection(Node):
         self.z1 = None
         self.left_x = None
         self.left_y = None
+        self.raw_x = None
+        self.raw_y = None
+        # Create a deque to store the latest frames
+        self._latest_color_img_deque= collections.deque(maxlen= 2)
+        self.raw_cam_info_deque = collections.deque(maxlen=2)
+
+
+        # Create a publisher for the lip pose
         self.lip_pose_pub = self.create_publisher(Point, "lip_pose", 10)
         self.sub_depth = self.create_subscription(
             msg_Image, self._depth_image_topic, self.imageDepthCallback, 1
@@ -52,6 +64,8 @@ class FaceDetection(Node):
         self.depth_publisher = self.create_publisher(
             msg_Image, "/depth_mask", qos_profile=10
         )
+        # camera subscriber for the raw image
+        self.raw_ci_sub = self.create_subscription(CameraInfo, "/camera/depth/camera_info", functools.partial(self.push_to_queue_callback, self.raw_cam_info_deque) ,10)
 
         self.original_publisher = self.create_publisher(
             msg_Image, "/original_mask", qos_profile=10
@@ -61,6 +75,12 @@ class FaceDetection(Node):
         self.tf_static_broadcaster = StaticTransformBroadcaster(self)
         self.make_transforms()
 
+        #        
+        self.named_queue = {
+            "_latest_color_img_deque" : self._latest_color_img_deque,
+            "raw_cam_info_deque" : self.raw_cam_info_deque
+        }
+        
         # create a timer
         self.declare_parameter("frequency", 100.0)
         self.frequency = (
@@ -100,8 +120,10 @@ class FaceDetection(Node):
         self.scale_factor = 0.0
         self.original_x = 0.0
         self.original_y = 0.0
-        
-        
+
+    def push_to_queue_callback(self,target_queue:collections.deque ,msg):
+        target_queue.append(msg)
+   
 
     def timer_callback(self):
         # Wait for a coherent pair of frames: depth and color
@@ -138,11 +160,22 @@ class FaceDetection(Node):
             #     cv2.circle(color_image, (x, y), 1, (255, 0, 0), -1)
 
             cv2.circle(color_image, (self.inital_lips_points[0][0], self.inital_lips_points[0][1]), 1, (0, 0, 255), -1)  # DEBUG RED
+        # STARTING RECIFYING THE IMAGE
+            raw_ci = self.raw_cam_info_deque[0]
 
-            
+            # This is stuff for the raw image:
+            raw_pin_model = PinholeCameraModel()
+            raw_pin_model.fromCameraInfo(raw_ci)
+            # get the rectified image left_x, left_y
             self.depth_publisher.publish(self.bridge.cv2_to_imgmsg(color_image))
             self.left_x = int(self.inital_lips_points[0][0] * self.scale_factor)
             self.left_y = int(self.inital_lips_points[0][1] * self.scale_factor)
+            # a tuple point for raw_pin model to tuck in
+            raw_point = (self.left_x, self.left_y)
+            raw_rect_pxy = raw_pin_model.rectifyPoint(raw_point)
+            self.raw_x = raw_rect_pxy[0]
+            self.raw_y = raw_rect_pxy[1]
+
             #DEBUG: Draw the lips point on the original image    
             for x, y in upper_lip_outer:
                 self.original_x = x * self.scale_factor
@@ -157,12 +190,12 @@ class FaceDetection(Node):
         # using the lips points to get the first set of xy in upper lips in the world frame
         # just for 1 point now!
         # if self.inital_lips_points is not None:
-        if self.left_x is not None and self.left_y is not None:
+        if self.left_x is not None and self.left_y is not None and self.raw_x is not None and self.raw_y is not None:
             # self.get_logger().info(
             #     f"left x: {self.left_x}, left y: {self.left_y}"
             # )
             x1, y1, z1 = self.depth_world(
-                self.left_x, self.left_y
+                self.raw_x, self.raw_y
             )
             self.x1 = x1
             self.y1 = y1
@@ -255,7 +288,7 @@ class FaceDetection(Node):
 
     def imageDepthCallback(self, data):
         """
-        Obtain latest depth image.
+        Obtain latest depth image.depth_publisher
 
         Args:
         ----
