@@ -52,9 +52,7 @@ private:
         target_pose.position.z = -point_msg.y/1000 + 0.175;
         RCLCPP_INFO_STREAM(logger, "robot command" << " x "<< target_pose.position.x << " y " << target_pose.position.y << " z " << target_pose.position.z);
 
-        // target_pose.position.x = 0.0;
-        // target_pose.position.y = 0.0;
-        // target_pose.position.z = 0.48; // Maximum height on zour
+
 
         double z_angle = std::atan2(target_pose.position.y, target_pose.position.x);
         tf2::Quaternion target_q;
@@ -78,6 +76,8 @@ private:
         } else {
             RCLCPP_ERROR(logger, "Planning failed!");
         }
+
+        
 
         // geometry_msgs::msg::TransformStamped t;
 
