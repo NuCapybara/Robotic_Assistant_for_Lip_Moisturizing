@@ -9,6 +9,11 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(trajectory_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(interbotix_xs_msgs REQUIRED)
 
 install(DIRECTORY
   launch
@@ -24,7 +29,10 @@ ament_target_dependencies(
   hello_moveit
   "moveit_ros_planning_interface"
   "rclcpp"
-  
+  trajectory_msgs
+  interbotix_xs_msgs
+  tf2 
+  tf2_ros
 )
 
 install(TARGETS hello_moveit

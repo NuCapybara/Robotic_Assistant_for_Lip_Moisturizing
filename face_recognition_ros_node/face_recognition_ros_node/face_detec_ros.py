@@ -24,14 +24,7 @@ from geometry_msgs.msg import TransformStamped
 
 class FaceDetection(Node):
     def __init__(self):
-        super().__init__("face_detection")k:
-- 647.4030151367188
-- 0.0
-- 645.4249877929688
-- 0.0
-- 647.4030151367188
-- 358.1263122558594
-
+        super().__init__("face_detection")
         self.bridge = CvBridge()
         self.intrinsics = None
         self._depth_info_topic = "/camera/color/camera_info"
