@@ -21,6 +21,7 @@ from ament_index_python.packages import get_package_share_directory
 from tf2_ros import TransformBroadcaster
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 from geometry_msgs.msg import TransformStamped
+from geometry_msgs.msg import PoseArray, Pose
 
 class FaceDetection(Node):
     def __init__(self):
@@ -39,7 +40,11 @@ class FaceDetection(Node):
         self.z1 = None
         self.left_x = None
         self.left_y = None
-        self.lip_pose_pub = self.create_publisher(Point, "lip_pose", 10)
+        self.x_point_lip = [0, 0, 0, 0]
+        self.y_point_lip = [0, 0, 0, 0]
+        self.poseArray = PoseArray()
+
+        self.lip_pose_pub = self.create_publisher(PoseArray, "lip_pose", 10)
         self.sub_depth = self.create_subscription(
             msg_Image, self._depth_image_topic, self.imageDepthCallback, 1
         )
@@ -138,17 +143,33 @@ class FaceDetection(Node):
             #     cv2.circle(color_image, (x, y), 1, (255, 0, 0), -1)
 
             cv2.circle(color_image, (self.inital_lips_points[0][0], self.inital_lips_points[0][1]), 1, (0, 0, 255), -1)  # DEBUG RED
+            cv2.circle(color_image, (self.inital_lips_points[1][0], self.inital_lips_points[1][1]), 1, (0, 255, 0), -1)  # DEBUG GREEN
+            cv2.circle(color_image, (self.inital_lips_points[2][0], self.inital_lips_points[2][1]), 1, (0, 255, 0), -1)
+            cv2.circle(color_image, (self.inital_lips_points[3][0], self.inital_lips_points[3][1]), 1, (0, 255, 0), -1)
 
-            
+        
             self.depth_publisher.publish(self.bridge.cv2_to_imgmsg(color_image))
+            
+            #Append the four points to the x,y list
+            for i in range(4):
+                scale_x = int(self.inital_lips_points[i][0]*self.scale_factor)
+                scale_y = int(self.inital_lips_points[i][1]*self.scale_factor)
+                self.x_point_lip[i] = scale_x
+                self.y_point_lip[i] = scale_y
+
             self.left_x = int(self.inital_lips_points[0][0] * self.scale_factor)
             self.left_y = int(self.inital_lips_points[0][1] * self.scale_factor)
+
+
             #DEBUG: Draw the lips point on the original image    
             for x, y in upper_lip_outer:
                 self.original_x = x * self.scale_factor
                 self.original_y = y * self.scale_factor
-                # cv2.circle(self._latest_color_img, (int(self.original_x), int(self.original_y)), 1, (0, 255, 0), -1)  # Green
-            cv2.circle(self._latest_color_img, (self.left_x, self.left_y), 1, (0, 255, 0), -1)  # DEBUG GREEN
+            
+            for i in range(4):
+                # cv2.circle(self._latest_color_img, (self.left_x, self.left_y), 1, (0, 255, 0), -1)  # DEBUG GREEN
+                cv2.circle(self._latest_color_img, (self.x_point_lip[i], self.y_point_lip[i]), 1, (0, 255, 0), -1)  # DEBUG GREEN
+            #after draw the points on rescaled image, publish the image
             self.original_publisher.publish(self.bridge.cv2_to_imgmsg(self._latest_color_img))
             
         # Show images
@@ -157,22 +178,39 @@ class FaceDetection(Node):
         # using the lips points to get the first set of xy in upper lips in the world frame
         # just for 1 point now!
         # if self.inital_lips_points is not None:
-        if self.left_x is not None and self.left_y is not None:
-            # self.get_logger().info(
-            #     f"left x: {self.left_x}, left y: {self.left_y}"
-            # )
-            x1, y1, z1 = self.depth_world(
-                self.left_x, self.left_y
-            )
-            self.x1 = x1
-            self.y1 = y1
-            self.z1 = z1
-            if self.x1 != 0.0 and self.y1 != 0.0 and self.z1 != 0.0:
+        for i in range(4):
+            if self.x_point_lip[i] is not None and self.y_point_lip[i] is not None:
                 # self.get_logger().info(
-                #     f"Real world coordinates x: {x1}, y: {y1}, z: {z1}"
+                #     f"left x: {self.left_x}, left y: {self.left_y}"
                 # )
-                self.lip_pose_pub.publish(Point(x=x1, y=y1, z=z1))
-                self.tf_broadcaster_func(x1, y1, z1, 0.0)
+                x1, y1, z1 = self.depth_world(
+                    self.x_point_lip[i], self.y_point_lip[i]
+                )
+                self.x1 = x1
+                self.y1 = y1
+                self.z1 = z1
+
+                if self.x1 != 0.0 and self.y1 != 0.0 and self.z1 != 0.0:
+                    if(i == 0):
+                        #broadcast the leftmost point of the lip
+                        self.tf_broadcaster_func(self.x1, self.y1, self.z1, 0.0)
+                    # self.get_logger().info(
+                    #     f"Real world coordinates x: {x1}, y: {y1}, z: {z1}"
+                    # )
+                    self.poseArray.header.stamp = self.get_clock().now().to_msg()
+                    self.poseArray.header.frame_id = "head_link"
+                    
+                    pose_push = Pose()
+                    pose_push.position.x = x1
+                    pose_push.position.y = y1
+                    pose_push.position.z = z1
+                    self.poseArray.poses.append(pose_push)
+
+                    # self.lip_pose_pub.publish(Point(x=x1, y=y1, z=z1))
+                    
+
+        self.lip_pose_pub.publish(self.poseArray)
+        
         # Break loop on 'q'
         if cv2.waitKey(1) & 0xFF == ord("q"):
             self.timer.cancel()  # Optionally cancel the timer

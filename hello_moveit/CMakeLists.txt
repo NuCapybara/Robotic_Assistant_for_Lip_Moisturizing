@@ -14,6 +14,7 @@ find_package(tf2 REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(interbotix_xs_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 
 install(DIRECTORY
   launch
@@ -33,6 +34,7 @@ ament_target_dependencies(
   interbotix_xs_msgs
   tf2 
   tf2_ros
+  geometry_msgs
 )
 
 install(TARGETS hello_moveit
