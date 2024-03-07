@@ -13,6 +13,7 @@
 #include <interbotix_xs_msgs/srv/motor_gains.hpp>
 #include <interbotix_xs_msgs/srv/register_values.hpp>
 #include <interbotix_xs_msgs/srv/robot_info.hpp>
+#include <sstream>
 
 
 using moveit::planning_interface::MoveGroupInterface;
@@ -47,21 +48,21 @@ public:
                 "/wx200/set_motor_pid_gains", 10);
 
         while (!get_motor_reg_cli->wait_for_service(std::chrono::seconds{1})) {
-        if (!rclcpp::ok()) {
-            RCLCPP_ERROR(logger,
-                        "Interrupted while waiting for the service. Exiting.");
-            return;
-        }
-        RCLCPP_INFO(logger, "service not available, waiting again...");
+            if (!rclcpp::ok()) {
+                RCLCPP_ERROR(logger,
+                            "Interrupted while waiting for the service. Exiting.");
+                return;
+            }
+            RCLCPP_INFO(logger, "service not available, waiting again...");
         }
 
 
-        // GetDynamixelReg("Position_D_Gain");
-        // RCLCPP_INFO_STREAM(logger, "AAAAA");
-        // GetDynamixelReg("Position_I_Gain");
-        // RCLCPP_INFO_STREAM(logger, "BBBBB");
-        // GetDynamixelReg("Position_P_Gain"); .
-        // RCLCPP_INFO_STREAM(logger, "CCCCC");
+        GetDynamixelReg("Position_D_Gain");
+        RCLCPP_INFO_STREAM(logger, "AAAAA");
+        GetDynamixelReg("Position_I_Gain");
+        RCLCPP_INFO_STREAM(logger, "BBBBB");
+        GetDynamixelReg("Position_P_Gain");
+        RCLCPP_INFO_STREAM(logger, "CCCCC");
 
 
         // Now this is useable, but we must set all gains together, which I don'
@@ -71,24 +72,24 @@ public:
 
         // Clean these up later.
 
-        // SetDynamixelReg("waist", "Position_P_Gain", 1920);
-        // SetDynamixelReg("shoulder", "Position_P_Gain", 1920);
-        // SetDynamixelReg("elbow", "Position_P_Gain", 1920);
-        // SetDynamixelReg("wrist_angle", "Position_P_Gain", 1920);
+        SetDynamixelReg("waist", "Position_P_Gain", 2200);
+        SetDynamixelReg("shoulder", "Position_P_Gain", 2200);
+        SetDynamixelReg("elbow", "Position_P_Gain", 2200);
+        SetDynamixelReg("wrist_angle", "Position_P_Gain", 2200);
 
-        // SetDynamixelReg("waist", "Position_I_Gain", 100);
-        // SetDynamixelReg("shoulder", "Position_I_Gain", 100);
-        // SetDynamixelReg("elbow", "Position_I_Gain", 100);
-        // SetDynamixelReg("wrist_angle", "Position_I_Gain", 100);
+        SetDynamixelReg("waist", "Position_I_Gain", 500);
+        SetDynamixelReg("shoulder", "Position_I_Gain", 500);
+        SetDynamixelReg("elbow", "Position_I_Gain", 500);
+        SetDynamixelReg("wrist_angle", "Position_I_Gain", 500);
 
-        // SetDynamixelReg("waist", "Position_D_Gain", 200);
-        // SetDynamixelReg("shoulder", "Position_D_Gain", 200);
-        // SetDynamixelReg("elbow", "Position_D_Gain", 200);
-        // SetDynamixelReg("wrist_angle", "Position_D_Gain", 200);
+        SetDynamixelReg("waist", "Position_D_Gain", 300);
+        SetDynamixelReg("shoulder", "Position_D_Gain", 300);
+        SetDynamixelReg("elbow", "Position_D_Gain", 300);
+        SetDynamixelReg("wrist_angle", "Position_D_Gain", 300);
 
-        // GetDynamixelReg("Position_D_Gain");
-        // GetDynamixelReg("Position_I_Gain");
-        // GetDynamixelReg("Position_P_Gain");
+        GetDynamixelReg("Position_D_Gain");
+        GetDynamixelReg("Position_I_Gain");
+        GetDynamixelReg("Position_P_Gain");
     }
 
 private:
@@ -181,35 +182,31 @@ private:
 
     void GetDynamixelReg(std::string reg_name) {
 
-    // clang-format off
+        // clang-format off
     // string cmd_type          # set to 'group' if commanding a joint group or 'single' if commanding a single joint
     // string name              # name of the group if commanding a joint group or joint if commanding a single joint
     // string reg               # register name (like Profile_Velocity, Profile_Acceleration, etc...)
     // int32 value              # desired register value (only set if 'setting' a register)
     // ---
     // int32[] values           # current register values (only filled if 'getting' a register)
-    // clang-format on
+        // clang-format on
 
         auto reg_req =
-        std::make_shared<interbotix_xs_msgs::srv::RegisterValues_Request>();
+            std::make_shared<interbotix_xs_msgs::srv::RegisterValues_Request>();
         reg_req->cmd_type = "group";
         reg_req->name = "arm";
         reg_req->reg = reg_name;
-        
+
         RCLCPP_INFO_STREAM(logger, "Getting reg value for " << reg_name);
 
         auto result = get_motor_reg_cli->async_send_request(reg_req);
+        RCLCPP_INFO_STREAM(logger, "RESULT RESLUT RESULT");
         // Wait for the result.
         if (rclcpp::spin_until_future_complete(node_ptr, result) ==
             rclcpp::FutureReturnCode::SUCCESS) {
-            // RCLCPP_INFO_STREAM(logger, "" << result.get()->values);
-            std::stringstream ss;
-            for (int value : result.get()->values) {
-                ss << value << " "; // Add each value to the stringstream, separated by spaces
-            }
-            RCLCPP_INFO_STREAM(logger, ss.str()); // Use ss.str() to get the string representation
+            RCLCPP_INFO_STREAM(logger, "Successfully get reg value for " << reg_name);
         } else {
-        RCLCPP_ERROR(logger, "Service call failed");
+            RCLCPP_ERROR(logger, "Service call failed");
         }
     }
 

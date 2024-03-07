@@ -67,7 +67,7 @@ class FaceDetection(Node):
         self.make_transforms()
 
         # create a timer
-        self.declare_parameter("frequency", 100.0)
+        self.declare_parameter("frequency", 1.0)
         self.frequency = (
             self.get_parameter("frequency").get_parameter_value().double_value
         )
