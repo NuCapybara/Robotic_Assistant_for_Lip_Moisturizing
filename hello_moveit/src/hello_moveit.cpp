@@ -56,12 +56,12 @@ public:
         }
 
 
-        GetDynamixelReg("Position_D_Gain");
+        // GetDynamixelReg("Position_D_Gain");
         // RCLCPP_INFO_STREAM(logger, "AAAAA");
-        GetDynamixelReg("Position_I_Gain");
-        RCLCPP_INFO_STREAM(logger, "BBBBB");
-        GetDynamixelReg("Position_P_Gain");
-        RCLCPP_INFO_STREAM(logger, "CCCCC");
+        // GetDynamixelReg("Position_I_Gain");
+        // RCLCPP_INFO_STREAM(logger, "BBBBB");
+        // GetDynamixelReg("Position_P_Gain"); .
+        // RCLCPP_INFO_STREAM(logger, "CCCCC");
 
 
         // Now this is useable, but we must set all gains together, which I don'
@@ -71,24 +71,24 @@ public:
 
         // Clean these up later.
 
-        SetDynamixelReg("waist", "Position_P_Gain", 1920);
-        SetDynamixelReg("shoulder", "Position_P_Gain", 1920);
-        SetDynamixelReg("elbow", "Position_P_Gain", 1920);
-        SetDynamixelReg("wrist_angle", "Position_P_Gain", 1920);
+        // SetDynamixelReg("waist", "Position_P_Gain", 1920);
+        // SetDynamixelReg("shoulder", "Position_P_Gain", 1920);
+        // SetDynamixelReg("elbow", "Position_P_Gain", 1920);
+        // SetDynamixelReg("wrist_angle", "Position_P_Gain", 1920);
 
-        SetDynamixelReg("waist", "Position_I_Gain", 100);
-        SetDynamixelReg("shoulder", "Position_I_Gain", 100);
-        SetDynamixelReg("elbow", "Position_I_Gain", 100);
-        SetDynamixelReg("wrist_angle", "Position_I_Gain", 100);
+        // SetDynamixelReg("waist", "Position_I_Gain", 100);
+        // SetDynamixelReg("shoulder", "Position_I_Gain", 100);
+        // SetDynamixelReg("elbow", "Position_I_Gain", 100);
+        // SetDynamixelReg("wrist_angle", "Position_I_Gain", 100);
 
-        SetDynamixelReg("waist", "Position_D_Gain", 200);
-        SetDynamixelReg("shoulder", "Position_D_Gain", 200);
-        SetDynamixelReg("elbow", "Position_D_Gain", 200);
-        SetDynamixelReg("wrist_angle", "Position_D_Gain", 200);
+        // SetDynamixelReg("waist", "Position_D_Gain", 200);
+        // SetDynamixelReg("shoulder", "Position_D_Gain", 200);
+        // SetDynamixelReg("elbow", "Position_D_Gain", 200);
+        // SetDynamixelReg("wrist_angle", "Position_D_Gain", 200);
 
-        GetDynamixelReg("Position_D_Gain");
-        GetDynamixelReg("Position_I_Gain");
-        GetDynamixelReg("Position_P_Gain");
+        // GetDynamixelReg("Position_D_Gain");
+        // GetDynamixelReg("Position_I_Gain");
+        // GetDynamixelReg("Position_P_Gain");
     }
 
 private:
@@ -98,7 +98,8 @@ private:
 
         ///the target pose initialization
         RCLCPP_INFO_STREAM(logger, "START PLAN AND EXECUTE");
-        for(size_t i = 0; i < point_msg.poses.size(); i++){
+        RCLCPP_INFO_STREAM(logger, "point_msg.poses.size() " << point_msg.poses.size());
+        for(size_t i = 0; i < 7; i++){
             geometry_msgs::msg::Pose eachPose;
             eachPose.position.x = point_msg.poses[i].position.x;
             eachPose.position.y = point_msg.poses[i].position.y;
@@ -116,7 +117,7 @@ private:
             }
             target_pose.position.y = -eachPose.position.x/1000 - 0.165;
             target_pose.position.z = -eachPose.position.y/1000 + 0.175;
-            RCLCPP_INFO_STREAM(logger, "robot command 111111" << " x "<< target_pose.position.x << " y " << target_pose.position.y << " z " << target_pose.position.z);
+            // RCLCPP_INFO_STREAM(logger, "robot command 111111" << " x "<< target_pose.position.x << " y " << target_pose.position.y << " z " << target_pose.position.z);
 
 
 
@@ -128,7 +129,7 @@ private:
             target_pose.orientation.y = target_q.y();
             target_pose.orientation.z = target_q.z();
             target_pose.orientation.w = target_q.w();
-
+            RCLCPP_INFO_STREAM(logger, "robot command" << " x "<< target_pose.position.x << " y " << target_pose.position.y << " z " << target_pose.position.z << " w " << target_pose.orientation.w << " x " << target_pose.orientation.x << " y " << target_pose.orientation.y << " z " << target_pose.orientation.z);
             move_group_interface.setPoseTarget(target_pose);
 
             // Planning and execution

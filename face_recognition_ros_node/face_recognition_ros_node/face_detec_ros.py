@@ -40,8 +40,8 @@ class FaceDetection(Node):
         self.z1 = None
         self.left_x = None
         self.left_y = None
-        self.x_point_lip = [0, 0, 0, 0]
-        self.y_point_lip = [0, 0, 0, 0]
+        self.x_point_lip = [0, 0, 0, 0, 0, 0, 0]
+        self.y_point_lip = [0, 0, 0, 0, 0, 0, 0]
         self.poseArray = PoseArray()
 
         self.lip_pose_pub = self.create_publisher(PoseArray, "lip_pose", 10)
@@ -146,12 +146,15 @@ class FaceDetection(Node):
             cv2.circle(color_image, (self.inital_lips_points[1][0], self.inital_lips_points[1][1]), 1, (0, 255, 0), -1)  # DEBUG GREEN
             cv2.circle(color_image, (self.inital_lips_points[2][0], self.inital_lips_points[2][1]), 1, (0, 255, 0), -1)
             cv2.circle(color_image, (self.inital_lips_points[3][0], self.inital_lips_points[3][1]), 1, (0, 255, 0), -1)
+            cv2.circle(color_image, (self.inital_lips_points[4][0], self.inital_lips_points[4][1]), 1, (0, 255, 0), -1)
+            cv2.circle(color_image, (self.inital_lips_points[5][0], self.inital_lips_points[5][1]), 1, (0, 255, 0), -1)
+            cv2.circle(color_image, (self.inital_lips_points[6][0], self.inital_lips_points[6][1]), 1, (0, 255, 0), -1)
 
         
             self.depth_publisher.publish(self.bridge.cv2_to_imgmsg(color_image))
             
-            #Append the four points to the x,y list
-            for i in range(4):
+            #Append the seven points to the x,y list
+            for i in range(7):
                 scale_x = int(self.inital_lips_points[i][0]*self.scale_factor)
                 scale_y = int(self.inital_lips_points[i][1]*self.scale_factor)
                 self.x_point_lip[i] = scale_x
@@ -166,7 +169,7 @@ class FaceDetection(Node):
                 self.original_x = x * self.scale_factor
                 self.original_y = y * self.scale_factor
             
-            for i in range(4):
+            for i in range(7):
                 # cv2.circle(self._latest_color_img, (self.left_x, self.left_y), 1, (0, 255, 0), -1)  # DEBUG GREEN
                 cv2.circle(self._latest_color_img, (self.x_point_lip[i], self.y_point_lip[i]), 1, (0, 255, 0), -1)  # DEBUG GREEN
             #after draw the points on rescaled image, publish the image
@@ -178,7 +181,7 @@ class FaceDetection(Node):
         # using the lips points to get the first set of xy in upper lips in the world frame
         # just for 1 point now!
         # if self.inital_lips_points is not None:
-        for i in range(4):
+        for i in range(7):
             if self.x_point_lip[i] is not None and self.y_point_lip[i] is not None:
                 # self.get_logger().info(
                 #     f"left x: {self.left_x}, left y: {self.left_y}"
