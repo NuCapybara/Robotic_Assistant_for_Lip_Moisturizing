@@ -11,7 +11,9 @@
 #include "geometry_msgs/msg/pose_array.hpp"
 #include <interbotix_xs_msgs/msg/joint_group_command.hpp>
 #include <interbotix_xs_msgs/srv/motor_gains.hpp>
+
 #include <interbotix_xs_msgs/srv/register_values.hpp>
+#include <interbotix_xs_msgs/srv/detail/register_values__struct.hpp>
 #include <interbotix_xs_msgs/srv/robot_info.hpp>
 #include <sstream>
 
@@ -72,15 +74,15 @@ public:
 
         // Clean these up later.
 
-        SetDynamixelReg("waist", "Position_P_Gain", 2200);
-        SetDynamixelReg("shoulder", "Position_P_Gain", 2200);
-        SetDynamixelReg("elbow", "Position_P_Gain", 2200);
-        SetDynamixelReg("wrist_angle", "Position_P_Gain", 2200);
+        SetDynamixelReg("waist", "Position_P_Gain", 1900);
+        SetDynamixelReg("shoulder", "Position_P_Gain", 1900);
+        SetDynamixelReg("elbow", "Position_P_Gain", 1900);
+        SetDynamixelReg("wrist_angle", "Position_P_Gain", 1900);
 
-        SetDynamixelReg("waist", "Position_I_Gain", 500);
-        SetDynamixelReg("shoulder", "Position_I_Gain", 500);
-        SetDynamixelReg("elbow", "Position_I_Gain", 500);
-        SetDynamixelReg("wrist_angle", "Position_I_Gain", 500);
+        SetDynamixelReg("waist", "Position_I_Gain", 400);
+        SetDynamixelReg("shoulder", "Position_I_Gain", 400);
+        SetDynamixelReg("elbow", "Position_I_Gain", 400);
+        SetDynamixelReg("wrist_angle", "Position_I_Gain", 400);
 
         SetDynamixelReg("waist", "Position_D_Gain", 300);
         SetDynamixelReg("shoulder", "Position_D_Gain", 300);
@@ -114,7 +116,8 @@ private:
                 target_pose.position.x = 0.35;
             }
             else{
-                target_pose.position.x = eachPose.position.z/1000 + 0.015;
+                ///0.12065 for bar
+                target_pose.position.x = eachPose.position.z/1000 - 0.12 + 0.015;
             }
             target_pose.position.y = -eachPose.position.x/1000 - 0.165;
             target_pose.position.z = -eachPose.position.y/1000 + 0.175;
@@ -204,7 +207,9 @@ private:
         // Wait for the result.
         if (rclcpp::spin_until_future_complete(node_ptr, result) ==
             rclcpp::FutureReturnCode::SUCCESS) {
+
             RCLCPP_INFO_STREAM(logger, "Successfully get reg value for " << reg_name);
+        // RCLCPP_INFO_STREAM(logger, ""<< interbotix_xs_msgs::srv::to_yaml(result.get()));
         } else {
             RCLCPP_ERROR(logger, "Service call failed");
         }
@@ -235,8 +240,6 @@ private:
         // Wait for the result.
         if (rclcpp::spin_until_future_complete(node_ptr, result) ==
             rclcpp::FutureReturnCode::SUCCESS) {
-
-        // RCLCPP_INFO_STREAM(logger, ""<< result.get()->values);
         RCLCPP_INFO_STREAM(logger, "Setting done");
         } else {
         RCLCPP_ERROR(logger, "Service call failed");
