@@ -29,13 +29,18 @@ public:
     {
         RCLCPP_INFO_STREAM(logger, "I am in the constructor");
         // Parameter declaration
-        node_ptr->declare_parameter<double>("rate", 100.);
+        node_ptr->declare_parameter<double>("rate", 0.1);
         rate_hz = node_ptr->get_parameter("rate").as_double();
         std::chrono::milliseconds rate = (std::chrono::milliseconds) ((int)(1000. / rate_hz));
         lip_pose_subscriber = node_ptr->create_subscription<geometry_msgs::msg::PoseArray>(
-            "lip_pose", 10,
-            std::bind(&CareMoveIt::plan_and_execute_cb, this,
+            "lip_pose", 1,
+            std::bind(&CareMoveIt::store_plan_position, this,
             std::placeholders::_1));
+
+        timer_ = node_ptr->create_wall_timer(
+            rate, std::bind(&CareMoveIt::timer_callback, this));
+
+        
 
         // Let's try to do some dynamixal register fun
 
@@ -75,17 +80,17 @@ public:
         // Clean these up later.
 
         SetDynamixelReg("waist", "Position_P_Gain", 1900);
-        SetDynamixelReg("shoulder", "Position_P_Gain", 1900);
+        SetDynamixelReg("shoulder", "Position_P_Gain", 2200);
         SetDynamixelReg("elbow", "Position_P_Gain", 1900);
         SetDynamixelReg("wrist_angle", "Position_P_Gain", 1900);
 
         SetDynamixelReg("waist", "Position_I_Gain", 400);
-        SetDynamixelReg("shoulder", "Position_I_Gain", 400);
+        // SetDynamixelReg("shoulder", "Position_I_Gain", 20);
         SetDynamixelReg("elbow", "Position_I_Gain", 400);
         SetDynamixelReg("wrist_angle", "Position_I_Gain", 400);
 
         SetDynamixelReg("waist", "Position_D_Gain", 300);
-        SetDynamixelReg("shoulder", "Position_D_Gain", 300);
+        SetDynamixelReg("shoulder", "Position_D_Gain", 400);
         SetDynamixelReg("elbow", "Position_D_Gain", 300);
         SetDynamixelReg("wrist_angle", "Position_D_Gain", 300);
 
@@ -97,16 +102,32 @@ public:
 private:
 
 
-    void plan_and_execute_cb(const geometry_msgs::msg::PoseArray &point_msg) {
+    void store_plan_position(const geometry_msgs::msg::PoseArray &point_msg) {
+        maybe_curr_lip_pose = point_msg;
+        // RCLCPP_INFO_STREAM(logger, "Im in store_plan_position");
+        //  << curr_lip_pose.poses[0].position.x << " " << curr_lip_pose.poses[0].position.y << " " << curr_lip_pose.poses[0].position.z);
+    }
 
+    void timer_callback(){
         ///the target pose initialization
+        if (! maybe_curr_lip_pose.has_value()){
+            return;
+        }
+
+        auto curr_lip_pose  = maybe_curr_lip_pose.value();
+        maybe_curr_lip_pose.reset();
+        rclcpp::Time lip_time = curr_lip_pose.header.stamp ;
+        rclcpp::Duration time_diff =  lip_time - node_ptr->get_clock()->now();
+        RCLCPP_ERROR_STREAM(logger, "lip stamp "<< lip_time.nanoseconds() << " time_diff " <<
+        time_diff.seconds() );
+
         RCLCPP_INFO_STREAM(logger, "START PLAN AND EXECUTE");
-        RCLCPP_INFO_STREAM(logger, "point_msg.poses.size() " << point_msg.poses.size());
+        RCLCPP_INFO_STREAM(logger, "curr_lip_pose.poses.size() " << curr_lip_pose.poses.size());
         for(size_t i = 0; i < 7; i++){
             geometry_msgs::msg::Pose eachPose;
-            eachPose.position.x = point_msg.poses[i].position.x;
-            eachPose.position.y = point_msg.poses[i].position.y;
-            eachPose.position.z = point_msg.poses[i].position.z;
+            eachPose.position.x = curr_lip_pose.poses[i].position.x;
+            eachPose.position.y = curr_lip_pose.poses[i].position.y;
+            eachPose.position.z = curr_lip_pose.poses[i].position.z;
             
             geometry_msgs::msg::Pose target_pose;
             // target_pose.position.x = point_msg.x;
@@ -144,7 +165,7 @@ private:
             // Execute the plan
             if(success) {
                 move_group_interface.execute(plan);
-                RCLCPP_INFO_STREAM(logger, "SUCCESS PLAN1");
+                // RCLCPP_INFO_STREAM(logger, "SUCCESS PLAN1");
             } else {
                 RCLCPP_ERROR(logger, "Planning failed!");
             }
@@ -168,7 +189,7 @@ private:
             moveit::planning_interface::MoveGroupInterface::Plan msg2;
             auto const success2 = static_cast<bool>(move_group_interface.plan(msg2));
             auto const plan2 = msg2;
-            RCLCPP_INFO_STREAM(logger, "RECEIVE PLAN2");
+            // RCLCPP_INFO_STREAM(logger, "RECEIVE PLAN2");
             // Execute the plan
             if(success2) {
                 move_group_interface.execute(plan2);
@@ -178,7 +199,8 @@ private:
             }
             rclcpp::sleep_for(std::chrono::seconds(2));
         }
-        exit(1);
+        maybe_curr_lip_pose.reset();
+        // exit(1);
     }
 
 
@@ -291,12 +313,14 @@ private:
     rclcpp::Node::SharedPtr node_ptr;
     rclcpp::TimerBase::SharedPtr timer_;
     double rate_hz;
+    std::optional<geometry_msgs::msg::PoseArray> maybe_curr_lip_pose;
     rclcpp::Logger logger;
     moveit::planning_interface::MoveGroupInterface move_group_interface;
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr lip_pose_subscriber;
     rclcpp::Client<interbotix_xs_msgs::srv::RegisterValues>::SharedPtr get_motor_reg_cli;
     rclcpp::Client<interbotix_xs_msgs::srv::RegisterValues>::SharedPtr set_motor_reg_cli;
     rclcpp::Client<interbotix_xs_msgs::srv::MotorGains>::SharedPtr set_motor_pid_cli;
+    
     
 };
 

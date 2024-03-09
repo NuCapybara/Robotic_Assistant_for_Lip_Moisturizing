@@ -67,7 +67,7 @@ class FaceDetection(Node):
         self.make_transforms()
 
         # create a timer
-        self.declare_parameter("frequency", 1.0)
+        self.declare_parameter("frequency", 100.0)
         self.frequency = (
             self.get_parameter("frequency").get_parameter_value().double_value
         )
@@ -181,6 +181,7 @@ class FaceDetection(Node):
         # using the lips points to get the first set of xy in upper lips in the world frame
         # just for 1 point now!
         # if self.inital_lips_points is not None:
+        self.poseArray.poses=[]
         for i in range(7):
             if self.x_point_lip[i] is not None and self.y_point_lip[i] is not None:
                 # self.get_logger().info(
@@ -218,6 +219,8 @@ class FaceDetection(Node):
         if cv2.waitKey(1) & 0xFF == ord("q"):
             self.timer.cancel()  # Optionally cancel the timer
             return
+        
+    
 
     def depth_world(self, x, y):
         """
