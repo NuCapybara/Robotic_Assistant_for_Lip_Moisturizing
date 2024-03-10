@@ -11,7 +11,7 @@
 #include "geometry_msgs/msg/pose_array.hpp"
 #include <interbotix_xs_msgs/msg/joint_group_command.hpp>
 #include <interbotix_xs_msgs/srv/motor_gains.hpp>
-
+#include <visualization_msgs/msg/marker.hpp>
 #include <interbotix_xs_msgs/srv/register_values.hpp>
 #include <interbotix_xs_msgs/srv/detail/register_values__struct.hpp>
 #include <interbotix_xs_msgs/srv/robot_info.hpp>
@@ -39,6 +39,8 @@ public:
 
         timer_ = node_ptr->create_wall_timer(
             rate, std::bind(&CareMoveIt::timer_callback, this));
+        rclcpp::QoS qos_policy = rclcpp::QoS(rclcpp::KeepLast(10)).transient_local();
+        target_marker_pub = node_ptr->create_publisher<visualization_msgs::msg::Marker>("~/target", qos_policy);
 
         
 
@@ -114,6 +116,7 @@ private:
             return;
         }
 
+
         auto curr_lip_pose  = maybe_curr_lip_pose.value();
         maybe_curr_lip_pose.reset();
         rclcpp::Time lip_time = curr_lip_pose.header.stamp ;
@@ -128,24 +131,55 @@ private:
             eachPose.position.x = curr_lip_pose.poses[i].position.x;
             eachPose.position.y = curr_lip_pose.poses[i].position.y;
             eachPose.position.z = curr_lip_pose.poses[i].position.z;
-            
+
+            ///a pose to help avoid collision on the face
+            geometry_msgs::msg::Pose buffer_pose;
             geometry_msgs::msg::Pose target_pose;
-            // target_pose.position.x = point_msg.x;
-            // target_pose.position.y = point_msg.y;
-            // target_pose.position.z = point_msg.z;
+
             if(eachPose.position.z > 0.4){
                 target_pose.position.x = 0.35;
+                buffer_pose.position.x = 0.28;
             }
             else{
+                /// before reaching target position, move to a buffer position first to realize dabbing
+                buffer_pose.position.x = eachPose.position.z/1000 - 0.25 + 0.015;
                 ///0.12065 for bar
                 target_pose.position.x = eachPose.position.z/1000 - 0.12 + 0.015;
+
             }
+            buffer_pose.position.y = -eachPose.position.x/1000 - 0.165;
+            buffer_pose.position.z = -eachPose.position.y/1000 + 0.175;
             target_pose.position.y = -eachPose.position.x/1000 - 0.165;
             target_pose.position.z = -eachPose.position.y/1000 + 0.175;
             // RCLCPP_INFO_STREAM(logger, "robot command 111111" << " x "<< target_pose.position.x << " y " << target_pose.position.y << " z " << target_pose.position.z);
+            ///Start buffer pose
+            double z_angle_buffer = std::atan2(buffer_pose.position.y, buffer_pose.position.x);
+            tf2::Quaternion target_q_buffer;
+            target_q_buffer.setRPY(0.0, 0.0, z_angle_buffer); // Set Euler angles
 
+            buffer_pose.orientation.x = target_q_buffer.x();
+            buffer_pose.orientation.y = target_q_buffer.y();
+            buffer_pose.orientation.z = target_q_buffer.z();
+            buffer_pose.orientation.w = target_q_buffer.w();
+            // RCLCPP_INFO_STREAM(logger, "robot command" << " x "<< buffer_pose.position.x << " y " << buffer_pose.position.y << " z " << buffer_pose.position.z << " w " << buffer_pose.orientation.w << " x " << buffer_pose.orientation.x << " y " << buffer_pose.orientation.y << " z " << buffer_pose.orientation.z);
+            move_group_interface.setPoseTarget(buffer_pose);
 
+            // Planning and execution
+            moveit::planning_interface::MoveGroupInterface::Plan msg_bf;
+            auto const success_bf = static_cast<bool>(move_group_interface.plan(msg_bf));
+            auto const plan_bf = msg_bf;
 
+            // Execute the plan
+            if(success_bf) {
+                move_group_interface.execute(plan_bf);
+                RCLCPP_INFO_STREAM(logger, "SUCCESS Buffer Pose" << "index" << i);
+            } else {
+                RCLCPP_ERROR(logger, "Planning failed! Buffer Pose");
+                RCLCPP_INFO_STREAM(logger, "FAIL Buffer Pose" << "index" << i);
+            }
+            rclcpp::sleep_for(std::chrono::seconds(1));
+
+            ///start dabbing
             double z_angle = std::atan2(target_pose.position.y, target_pose.position.x);
             tf2::Quaternion target_q;
             target_q.setRPY(0.0, 0.0, z_angle); // Set Euler angles
@@ -154,6 +188,30 @@ private:
             target_pose.orientation.y = target_q.y();
             target_pose.orientation.z = target_q.z();
             target_pose.orientation.w = target_q.w();
+
+
+            ///publishing visualization marker
+            visualization_msgs::msg::Marker marker;
+            marker.header.frame_id = "wx200/base_link";
+            marker.header.stamp = node_ptr->now();
+            marker.type = visualization_msgs::msg::Marker::SPHERE;
+            marker.action = visualization_msgs::msg::Marker::ADD;
+            marker.pose.position.x = target_pose.position.x;
+            marker.pose.position.y = target_pose.position.y;
+            marker.pose.position.z = target_pose.position.z;
+            marker.pose.orientation.x = target_pose.orientation.x;
+            marker.pose.orientation.y = target_pose.orientation.y;
+            marker.pose.orientation.z =  target_pose.orientation.z;
+            marker.pose.orientation.w = target_pose.orientation.w;
+            marker.scale.x = 0.01;
+            marker.scale.y = 0.01;
+            marker.scale.z = 0.01;
+            marker.color.a = 1.0; // Don't forget to set the alpha!
+            marker.color.r = 0.0;
+            marker.color.g = 1.0;
+            marker.color.b = 0.0;
+            target_marker_pub->publish(marker);
+
             RCLCPP_INFO_STREAM(logger, "robot command" << " x "<< target_pose.position.x << " y " << target_pose.position.y << " z " << target_pose.position.z << " w " << target_pose.orientation.w << " x " << target_pose.orientation.x << " y " << target_pose.orientation.y << " z " << target_pose.orientation.z);
             move_group_interface.setPoseTarget(target_pose);
 
@@ -165,15 +223,19 @@ private:
             // Execute the plan
             if(success) {
                 move_group_interface.execute(plan);
-                // RCLCPP_INFO_STREAM(logger, "SUCCESS PLAN1");
+                RCLCPP_INFO_STREAM(logger, "SUCCESS Target Pose index" << i);
             } else {
-                RCLCPP_ERROR(logger, "Planning failed!");
+                RCLCPP_ERROR(logger, "Planning failed! index");
+                RCLCPP_INFO_STREAM(logger, "FAIL Target Pose index" << i);
             }
             rclcpp::sleep_for(std::chrono::seconds(1));
+
+            ///going back to reset_pose everytime after finishing a dabbing
             geometry_msgs::msg::Pose reset_pose;
-            reset_pose.position.x = 0.35;
+            reset_pose.position.x = 0.25;
             reset_pose.position.y = -0.00600772;
             reset_pose.position.z = 0.109082;
+            // reset_pose.position.z = 0.45;
             double z_rst_angle = std::atan2(reset_pose.position.y, reset_pose.position.x);
             tf2::Quaternion target_q_reset;
             target_q_reset.setRPY(0.0, 0.0, z_rst_angle); // Set Euler angles
@@ -193,7 +255,7 @@ private:
             // Execute the plan
             if(success2) {
                 move_group_interface.execute(plan2);
-                RCLCPP_INFO_STREAM(logger, "SUCCESS PLAN2 in msg index" << i);
+                RCLCPP_INFO_STREAM(logger, "SUCCESS RESETTTTT in msg index RESETTTT" << i);
             } else {
                 RCLCPP_ERROR(logger, "Planning failed!");
             }
@@ -320,7 +382,7 @@ private:
     rclcpp::Client<interbotix_xs_msgs::srv::RegisterValues>::SharedPtr get_motor_reg_cli;
     rclcpp::Client<interbotix_xs_msgs::srv::RegisterValues>::SharedPtr set_motor_reg_cli;
     rclcpp::Client<interbotix_xs_msgs::srv::MotorGains>::SharedPtr set_motor_pid_cli;
-    
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr target_marker_pub;
     
 };
 
