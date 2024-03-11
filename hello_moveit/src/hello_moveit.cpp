@@ -21,6 +21,22 @@
 
 using moveit::planning_interface::MoveGroupInterface;
 
+namespace {
+    // Only can use std string until cpp20
+    constexpr int kDebugArrowId = 10;
+
+    template <class T>
+    std::ostream &operator<<(std::ostream &os, const std::vector<T> &v) {
+    os << "[";
+    for (typename std::vector<T>::const_iterator ii = v.begin(); ii != v.end();
+        ++ii) {
+        os << " " << *ii;
+    }
+    os << "]";
+    return os;
+    }
+} // namespace
+
 class CareMoveIt {
 public:
     CareMoveIt(rclcpp::Node::SharedPtr node_ptr)
@@ -45,7 +61,10 @@ public:
         rclcpp::QoS qos_policy = rclcpp::QoS(rclcpp::KeepLast(10)).transient_local();
         target_marker_pub = node_ptr->create_publisher<visualization_msgs::msg::Marker>("~/target", qos_policy);
         target_marker_arr_pub = node_ptr->create_publisher<visualization_msgs::msg::MarkerArray>("~/target_array", qos_policy);
-        
+        ///joint command publisher to move the robot
+        joint_cmd_pub =
+        node_ptr->create_publisher<interbotix_xs_msgs::msg::JointGroupCommand>(
+            "/wx200/commands/joint_group", 10);
 
         // Let's try to do some dynamixal register fun
 
@@ -128,7 +147,7 @@ private:
         time_diff.seconds() );
         RCLCPP_INFO_STREAM(logger, "11111111111");
         visualization_msgs::msg::MarkerArray arr;
-        for(size_t i = 0; i < 4; i++){
+        for(size_t i = 0; i < 7; i++){
             geometry_msgs::msg::Pose target_pose_sim;
             // if(curr_lip_pose.poses[i].position.z > 0.5){
             //     target_pose_sim.position.x = 0.4;
@@ -173,7 +192,7 @@ private:
 
         // RCLCPP_INFO_STREAM(logger, "START PLAN AND EXECUTE");
         // RCLCPP_INFO_STREAM(logger, "curr_lip_pose.poses.size() " << curr_lip_pose.poses.size());
-        for(size_t i = 0; i < 4; i++){
+        for(size_t i = 0; i < 7; i++){
             geometry_msgs::msg::Pose eachPose;
             eachPose.position.x = curr_lip_pose.poses[i].position.x;
             eachPose.position.y = curr_lip_pose.poses[i].position.y;
@@ -222,8 +241,35 @@ private:
 
             // Execute the plan
             if(success_bf) {
-                move_group_interface.execute(plan_bf);
-                RCLCPP_INFO_STREAM(logger, "SUCCESS Buffer Pose" << "index" << i);
+                // move_group_interface.execute(plan_bf);
+                ///get joint names
+                std::vector<std::string> j_names_bf =
+                    msg_bf.trajectory.joint_trajectory.joint_names;
+                
+                // This give the last joint trajectory_ point object.
+                std::vector<double> final_js_bf =
+                    msg_bf.trajectory.joint_trajectory.points.back().positions;
+                std::vector<double> start_js_bf =
+                    msg_bf.trajectory.joint_trajectory.points.front().positions;
+
+                RCLCPP_INFO_STREAM(logger, "js_name buffer" << j_names_bf);
+                RCLCPP_INFO_STREAM(logger, "Starting js buffer " << start_js_bf);
+                RCLCPP_INFO_STREAM(logger, "Ending js bufeer " << final_js_bf);
+
+                for (auto cmd_point : msg_bf.trajectory.joint_trajectory.points) {
+                    // std::chrono::nanoseconds new_time{
+                    //     uint64_t(cmd_point.time_from_start.nanosec +
+                    //             cmd_point.time_from_start.sec * 1e9)};
+
+                    // RCLCPP_WARN_STREAM(logger, "Sleep "
+                    //                                 << (new_time - last_time).count() / 1e6
+                    //                                 << "ms before sending");
+                    // rclcpp::sleep_for(new_time - last_time);
+                    // last_time = new_time;
+                    auto jg_cmd = GenArmCmd(cmd_point);
+                    joint_cmd_pub->publish(jg_cmd);
+                }
+                // RCLCPP_INFO_STREAM(logger, "SUCCESS Buffer Pose" << "index" << i);
             } else {
                 RCLCPP_ERROR(logger, "Planning failed! Buffer Pose");
                 RCLCPP_INFO_STREAM(logger, "FAIL Buffer Pose" << "index" << i);
@@ -276,83 +322,47 @@ private:
 
             // Execute the plan
             if(success) {
-                move_group_interface.execute(plan);
+                // move_group_interface.execute(plan);
+                for (auto cmd_point : msg.trajectory.joint_trajectory.points) {
+                    // std::chrono::nanoseconds new_time{
+                    //     uint64_t(cmd_point.time_from_start.nanosec +
+                    //             cmd_point.time_from_start.sec * 1e9)};
+
+                    // RCLCPP_WARN_STREAM(logger, "Sleep "
+                    //                                 << (new_time - last_time).count() / 1e6
+                    //                                 << "ms before sending");
+                    // rclcpp::sleep_for(new_time - last_time);
+                    // last_time = new_time;
+                    auto jg_cmd = GenArmCmd(cmd_point);
+                    joint_cmd_pub->publish(jg_cmd);
+                }
                 RCLCPP_INFO_STREAM(logger, "SUCCESS Target Pose index" << i);
             } else {
                 RCLCPP_ERROR(logger, "Planning failed! index");
                 RCLCPP_INFO_STREAM(logger, "FAIL Target Pose index" << i);
             }
             rclcpp::sleep_for(std::chrono::seconds(1));
-
-            ///going back to reset_pose everytime after finishing a dabbing
-            // geometry_msgs::msg::Pose reset_pose;
-            // reset_pose.position.x = 0.25;
-            // reset_pose.position.y = -0.00600772;
-            // reset_pose.position.z = 0.109082;
-            // // reset_pose.position.z = 0.45;
-            // double z_rst_angle = std::atan2(reset_pose.position.y, reset_pose.position.x);
-            // tf2::Quaternion target_q_reset;
-            // target_q_reset.setRPY(0.0, 0.0, z_rst_angle); // Set Euler angles
-
-            // reset_pose.orientation.x = target_q_reset.x();
-            // reset_pose.orientation.y = target_q_reset.y();
-            // reset_pose.orientation.z = target_q_reset.z();
-            // reset_pose.orientation.w = target_q_reset.w();
-
-            // move_group_interface.setPoseTarget(reset_pose,ee_link_name);
-
-            // // Planning and execution
-            // moveit::planning_interface::MoveGroupInterface::Plan msg2;
-            
-            // auto const success2 = static_cast<bool>(move_group_interface.plan(msg2));
-            // auto const plan2 = msg2;
-            // // RCLCPP_INFO_STREAM(logger, "RECEIVE PLAN2");
-            // // Execute the plan
-            // if(success2) {
-            //     move_group_interface.execute(plan2);
-            //     RCLCPP_INFO_STREAM(logger, "SUCCESS RESETTTTT in msg index RESETTTT" << i);
-            // } else {
-            //     RCLCPP_ERROR(logger, "Planning failed!");
-            // }
-            // rclcpp::sleep_for(std::chrono::seconds(2));
-
         }
-        
-
-
-        std::map<std::string, double> target_joint_values;
-        target_joint_values["waist"] = 0.010737866163253784;
-        target_joint_values["shoulder"] = -1.922078013420105;
-        target_joint_values["elbow"] = 1.546252727508545;
-        target_joint_values["wrist_angle"] = 0.8022719621658325;
-        target_joint_values["wrist_rotate"] = -0.0015339808305725455;
-        target_joint_values["gripper"] = 0.47860202193260193;
-        target_joint_values["left_finger"] = 0.026979731395840645;
-        target_joint_values["right_finger"] = -0.026979731395840645;
-
-        // Set the target joint state
-        move_group_interface.setJointValueTarget(target_joint_values);
-
-        // Plan to the given joint state
-        moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-        auto const success_home = static_cast<bool>(move_group_interface.plan(my_plan));
-        if (success_home)
-        {
-            // Execute the plan
-            move_group_interface.execute(my_plan);
-            RCLCPP_INFO(logger, "Motion to target joint state succeeded.!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-        }
-        else
-        {
-            RCLCPP_ERROR(logger, "Motion to target joint state failed.!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1");
-        }
-        RCLCPP_INFO(logger, "OHOOOH I DIED?");
+        ///going back to home pose
+        trajectory_msgs::msg::JointTrajectoryPoint home_point;
+        home_point.positions = {0.0, -1.88, 1.5, 0.8, 0.0};
+        home_point.time_from_start = rclcpp::Duration(10, 0);
+        auto jg_cmd = GenArmCmd(home_point);
+        joint_cmd_pub->publish(jg_cmd);
         rclcpp::sleep_for(std::chrono::seconds(5));
-        RCLCPP_INFO(logger, "OHOOOH I DIED!");
         maybe_curr_lip_pose.reset();
     }
 
+    interbotix_xs_msgs::msg::JointGroupCommand
+    GenArmCmd(trajectory_msgs::msg::JointTrajectoryPoint point) {
 
+        interbotix_xs_msgs::msg::JointGroupCommand jg_cmd;
+        jg_cmd.name = "arm";
+        for (auto j : point.positions) {
+        jg_cmd.cmd.push_back(j);
+        }
+        return jg_cmd;
+    }
 
     void GetDynamixelReg(std::string reg_name) {
 
@@ -472,6 +482,8 @@ private:
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr target_marker_pub;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr target_marker_arr_pub;
     std::string ee_link_name;
+    rclcpp::Publisher<interbotix_xs_msgs::msg::JointGroupCommand>::SharedPtr
+    joint_cmd_pub;
     
 };
 
