@@ -8,6 +8,7 @@
         <arg name="hardware_type" value="$(var hardware_type)" />
         <arg name="publish_robot_description_semantic" value="True" />
         <arg name="use_world_frame" value="true"/>
+        <arg name="external_urdf_loc" value="$(find-pkg-share hello_moveit)/urdf/wx200-ee.urdf.xacro" />
     </include>
 
 </launch>

@@ -12,6 +12,7 @@
 #include <interbotix_xs_msgs/msg/joint_group_command.hpp>
 #include <interbotix_xs_msgs/srv/motor_gains.hpp>
 #include <visualization_msgs/msg/marker.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 #include <interbotix_xs_msgs/srv/register_values.hpp>
 #include <interbotix_xs_msgs/srv/detail/register_values__struct.hpp>
 #include <interbotix_xs_msgs/srv/robot_info.hpp>
@@ -25,7 +26,9 @@ public:
     CareMoveIt(rclcpp::Node::SharedPtr node_ptr)
     : node_ptr(node_ptr),
       logger(node_ptr->get_logger()),
-      move_group_interface(MoveGroupInterface(node_ptr, "interbotix_arm"))
+      move_group_interface(MoveGroupInterface(node_ptr, "interbotix_arm")),
+      ee_link_name(node_ptr->get_parameter_or<std::string>(
+            "ee_link_name", "pen_ee_link"))
     {
         RCLCPP_INFO_STREAM(logger, "I am in the constructor");
         // Parameter declaration
@@ -41,7 +44,7 @@ public:
             rate, std::bind(&CareMoveIt::timer_callback, this));
         rclcpp::QoS qos_policy = rclcpp::QoS(rclcpp::KeepLast(10)).transient_local();
         target_marker_pub = node_ptr->create_publisher<visualization_msgs::msg::Marker>("~/target", qos_policy);
-
+        target_marker_arr_pub = node_ptr->create_publisher<visualization_msgs::msg::MarkerArray>("~/target_array", qos_policy);
         
 
         // Let's try to do some dynamixal register fun
@@ -81,7 +84,7 @@ public:
 
         // Clean these up later.
 
-        SetDynamixelReg("waist", "Position_P_Gain", 1900);
+        SetDynamixelReg("waist", "Position_P_Gain", 1800);
         SetDynamixelReg("shoulder", "Position_P_Gain", 2200);
         SetDynamixelReg("elbow", "Position_P_Gain", 1900);
         SetDynamixelReg("wrist_angle", "Position_P_Gain", 1900);
@@ -123,10 +126,54 @@ private:
         rclcpp::Duration time_diff =  lip_time - node_ptr->get_clock()->now();
         RCLCPP_ERROR_STREAM(logger, "lip stamp "<< lip_time.nanoseconds() << " time_diff " <<
         time_diff.seconds() );
+        RCLCPP_INFO_STREAM(logger, "11111111111");
+        visualization_msgs::msg::MarkerArray arr;
+        for(size_t i = 0; i < 4; i++){
+            geometry_msgs::msg::Pose target_pose_sim;
+            // if(curr_lip_pose.poses[i].position.z > 0.5){
+            //     target_pose_sim.position.x = 0.4;
+            // }
+            // else{
+            //     target_pose_sim.position.x = curr_lip_pose.poses[i].position.z/1000 + 0.015;
+            // }
+            RCLCPP_INFO_STREAM(logger, "2222222222");
+            ///cause segmentation fault when camera is blocked
+            target_pose_sim.position.x = curr_lip_pose.poses[i].position.z/1000 + 0.015;
+            target_pose_sim.position.y = -curr_lip_pose.poses[i].position.x/1000 - 0.165;
+            target_pose_sim.position.z = -curr_lip_pose.poses[i].position.y/1000 + 0.175;
+            RCLCPP_INFO_STREAM(logger, "3333333333");
+            double z_angle_sim_buffer = std::atan2(target_pose_sim.position.y, target_pose_sim.position.x);
+            tf2::Quaternion target_q_sim;
+            RCLCPP_INFO_STREAM(logger, "444444");
+            target_q_sim.setRPY(0.0, 0.0, z_angle_sim_buffer); // Set Euler angles
+            
+            visualization_msgs::msg::Marker marker;
+            marker.header.frame_id = "wx200/base_link";
+            marker.header.stamp = node_ptr->now();
+            marker.id = i;
+            marker.type = visualization_msgs::msg::Marker::SPHERE;
+            marker.action = visualization_msgs::msg::Marker::ADD;
+            marker.pose.position.x = target_pose_sim.position.x;
+            marker.pose.position.y = target_pose_sim.position.y;
+            marker.pose.position.z = target_pose_sim.position.z;
+            marker.pose.orientation.x = target_q_sim.x();
+            marker.pose.orientation.y = target_q_sim.y();
+            marker.pose.orientation.z =  target_q_sim.z();
+            marker.pose.orientation.w = target_q_sim.w();
+            marker.scale.x = 0.01;
+            marker.scale.y = 0.01;
+            marker.scale.z = 0.01;
+            marker.color.a = 1.0; // Don't forget to set the alpha!
+            marker.color.r = 0.0;
+            marker.color.g = 1.0;
+            marker.color.b = 1.0;
+            arr.markers.push_back(marker);
+        }
+            target_marker_arr_pub->publish(arr);
 
-        RCLCPP_INFO_STREAM(logger, "START PLAN AND EXECUTE");
-        RCLCPP_INFO_STREAM(logger, "curr_lip_pose.poses.size() " << curr_lip_pose.poses.size());
-        for(size_t i = 0; i < 7; i++){
+        // RCLCPP_INFO_STREAM(logger, "START PLAN AND EXECUTE");
+        // RCLCPP_INFO_STREAM(logger, "curr_lip_pose.poses.size() " << curr_lip_pose.poses.size());
+        for(size_t i = 0; i < 4; i++){
             geometry_msgs::msg::Pose eachPose;
             eachPose.position.x = curr_lip_pose.poses[i].position.x;
             eachPose.position.y = curr_lip_pose.poses[i].position.y;
@@ -136,17 +183,21 @@ private:
             geometry_msgs::msg::Pose buffer_pose;
             geometry_msgs::msg::Pose target_pose;
 
-            if(eachPose.position.z > 0.4){
-                target_pose.position.x = 0.35;
-                buffer_pose.position.x = 0.28;
+            if(eachPose.position.z > 0.5){
+                RCLCPP_INFO_STREAM(logger, "CURR LIP POSE" << curr_lip_pose.poses[i].position.z << "EACH POSITION Z" <<eachPose.position.z  );
+                target_pose.position.x = 0.4;
+                buffer_pose.position.x = 0.3;
+
             }
             else{
                 /// before reaching target position, move to a buffer position first to realize dabbing
-                buffer_pose.position.x = eachPose.position.z/1000 - 0.25 + 0.015;
+                buffer_pose.position.x = eachPose.position.z/1000 - 0.13 + 0.015;
                 ///0.12065 for bar
-                target_pose.position.x = eachPose.position.z/1000 - 0.12 + 0.015;
+                target_pose.position.x = eachPose.position.z/1000 + 0.015;
 
             }
+            buffer_pose.position.x = eachPose.position.z/1000 - 0.13 + 0.015;
+            target_pose.position.x = eachPose.position.z/1000 + 0.015;
             buffer_pose.position.y = -eachPose.position.x/1000 - 0.165;
             buffer_pose.position.z = -eachPose.position.y/1000 + 0.175;
             target_pose.position.y = -eachPose.position.x/1000 - 0.165;
@@ -162,7 +213,7 @@ private:
             buffer_pose.orientation.z = target_q_buffer.z();
             buffer_pose.orientation.w = target_q_buffer.w();
             // RCLCPP_INFO_STREAM(logger, "robot command" << " x "<< buffer_pose.position.x << " y " << buffer_pose.position.y << " z " << buffer_pose.position.z << " w " << buffer_pose.orientation.w << " x " << buffer_pose.orientation.x << " y " << buffer_pose.orientation.y << " z " << buffer_pose.orientation.z);
-            move_group_interface.setPoseTarget(buffer_pose);
+            move_group_interface.setPoseTarget(buffer_pose, ee_link_name);
 
             // Planning and execution
             moveit::planning_interface::MoveGroupInterface::Plan msg_bf;
@@ -176,6 +227,9 @@ private:
             } else {
                 RCLCPP_ERROR(logger, "Planning failed! Buffer Pose");
                 RCLCPP_INFO_STREAM(logger, "FAIL Buffer Pose" << "index" << i);
+                if(i == 0){
+                    return;
+                }
             }
             rclcpp::sleep_for(std::chrono::seconds(1));
 
@@ -203,17 +257,17 @@ private:
             marker.pose.orientation.y = target_pose.orientation.y;
             marker.pose.orientation.z =  target_pose.orientation.z;
             marker.pose.orientation.w = target_pose.orientation.w;
-            marker.scale.x = 0.01;
-            marker.scale.y = 0.01;
-            marker.scale.z = 0.01;
+            marker.scale.x = 0.02;
+            marker.scale.y = 0.02;
+            marker.scale.z = 0.02;
             marker.color.a = 1.0; // Don't forget to set the alpha!
-            marker.color.r = 0.0;
-            marker.color.g = 1.0;
+            marker.color.r = 1.0;
+            marker.color.g = 0.0;
             marker.color.b = 0.0;
             target_marker_pub->publish(marker);
 
-            RCLCPP_INFO_STREAM(logger, "robot command" << " x "<< target_pose.position.x << " y " << target_pose.position.y << " z " << target_pose.position.z << " w " << target_pose.orientation.w << " x " << target_pose.orientation.x << " y " << target_pose.orientation.y << " z " << target_pose.orientation.z);
-            move_group_interface.setPoseTarget(target_pose);
+            // RCLCPP_INFO_STREAM(logger, "robot command" << " x "<< target_pose.position.x << " y " << target_pose.position.y << " z " << target_pose.position.z << " w " << target_pose.orientation.w << " x " << target_pose.orientation.x << " y " << target_pose.orientation.y << " z " << target_pose.orientation.z);
+            move_group_interface.setPoseTarget(target_pose, ee_link_name);
 
             // Planning and execution
             moveit::planning_interface::MoveGroupInterface::Plan msg;
@@ -231,38 +285,71 @@ private:
             rclcpp::sleep_for(std::chrono::seconds(1));
 
             ///going back to reset_pose everytime after finishing a dabbing
-            geometry_msgs::msg::Pose reset_pose;
-            reset_pose.position.x = 0.25;
-            reset_pose.position.y = -0.00600772;
-            reset_pose.position.z = 0.109082;
-            // reset_pose.position.z = 0.45;
-            double z_rst_angle = std::atan2(reset_pose.position.y, reset_pose.position.x);
-            tf2::Quaternion target_q_reset;
-            target_q_reset.setRPY(0.0, 0.0, z_rst_angle); // Set Euler angles
+            // geometry_msgs::msg::Pose reset_pose;
+            // reset_pose.position.x = 0.25;
+            // reset_pose.position.y = -0.00600772;
+            // reset_pose.position.z = 0.109082;
+            // // reset_pose.position.z = 0.45;
+            // double z_rst_angle = std::atan2(reset_pose.position.y, reset_pose.position.x);
+            // tf2::Quaternion target_q_reset;
+            // target_q_reset.setRPY(0.0, 0.0, z_rst_angle); // Set Euler angles
 
-            reset_pose.orientation.x = target_q_reset.x();
-            reset_pose.orientation.y = target_q_reset.y();
-            reset_pose.orientation.z = target_q_reset.z();
-            reset_pose.orientation.w = target_q_reset.w();
+            // reset_pose.orientation.x = target_q_reset.x();
+            // reset_pose.orientation.y = target_q_reset.y();
+            // reset_pose.orientation.z = target_q_reset.z();
+            // reset_pose.orientation.w = target_q_reset.w();
 
-            move_group_interface.setPoseTarget(reset_pose);
+            // move_group_interface.setPoseTarget(reset_pose,ee_link_name);
 
-            // Planning and execution
-            moveit::planning_interface::MoveGroupInterface::Plan msg2;
-            auto const success2 = static_cast<bool>(move_group_interface.plan(msg2));
-            auto const plan2 = msg2;
-            // RCLCPP_INFO_STREAM(logger, "RECEIVE PLAN2");
-            // Execute the plan
-            if(success2) {
-                move_group_interface.execute(plan2);
-                RCLCPP_INFO_STREAM(logger, "SUCCESS RESETTTTT in msg index RESETTTT" << i);
-            } else {
-                RCLCPP_ERROR(logger, "Planning failed!");
-            }
-            rclcpp::sleep_for(std::chrono::seconds(2));
+            // // Planning and execution
+            // moveit::planning_interface::MoveGroupInterface::Plan msg2;
+            
+            // auto const success2 = static_cast<bool>(move_group_interface.plan(msg2));
+            // auto const plan2 = msg2;
+            // // RCLCPP_INFO_STREAM(logger, "RECEIVE PLAN2");
+            // // Execute the plan
+            // if(success2) {
+            //     move_group_interface.execute(plan2);
+            //     RCLCPP_INFO_STREAM(logger, "SUCCESS RESETTTTT in msg index RESETTTT" << i);
+            // } else {
+            //     RCLCPP_ERROR(logger, "Planning failed!");
+            // }
+            // rclcpp::sleep_for(std::chrono::seconds(2));
+
         }
+        
+
+
+        std::map<std::string, double> target_joint_values;
+        target_joint_values["waist"] = 0.010737866163253784;
+        target_joint_values["shoulder"] = -1.922078013420105;
+        target_joint_values["elbow"] = 1.546252727508545;
+        target_joint_values["wrist_angle"] = 0.8022719621658325;
+        target_joint_values["wrist_rotate"] = -0.0015339808305725455;
+        target_joint_values["gripper"] = 0.47860202193260193;
+        target_joint_values["left_finger"] = 0.026979731395840645;
+        target_joint_values["right_finger"] = -0.026979731395840645;
+
+        // Set the target joint state
+        move_group_interface.setJointValueTarget(target_joint_values);
+
+        // Plan to the given joint state
+        moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+        auto const success_home = static_cast<bool>(move_group_interface.plan(my_plan));
+        if (success_home)
+        {
+            // Execute the plan
+            move_group_interface.execute(my_plan);
+            RCLCPP_INFO(logger, "Motion to target joint state succeeded.!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        }
+        else
+        {
+            RCLCPP_ERROR(logger, "Motion to target joint state failed.!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1");
+        }
+        RCLCPP_INFO(logger, "OHOOOH I DIED?");
+        rclcpp::sleep_for(std::chrono::seconds(5));
+        RCLCPP_INFO(logger, "OHOOOH I DIED!");
         maybe_curr_lip_pose.reset();
-        // exit(1);
     }
 
 
@@ -287,7 +374,7 @@ private:
         RCLCPP_INFO_STREAM(logger, "Getting reg value for " << reg_name);
 
         auto result = get_motor_reg_cli->async_send_request(reg_req);
-        RCLCPP_INFO_STREAM(logger, "RESULT RESLUT RESULT");
+        // RCLCPP_INFO_STREAM(logger, "RESULT RESLUT RESULT");
         // Wait for the result.
         if (rclcpp::spin_until_future_complete(node_ptr, result) ==
             rclcpp::FutureReturnCode::SUCCESS) {
@@ -383,6 +470,8 @@ private:
     rclcpp::Client<interbotix_xs_msgs::srv::RegisterValues>::SharedPtr set_motor_reg_cli;
     rclcpp::Client<interbotix_xs_msgs::srv::MotorGains>::SharedPtr set_motor_pid_cli;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr target_marker_pub;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr target_marker_arr_pub;
+    std::string ee_link_name;
     
 };
 

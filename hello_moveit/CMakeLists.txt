@@ -20,6 +20,7 @@ find_package(visualization_msgs REQUIRED)
 install(DIRECTORY
   launch
   config
+  urdf
   DESTINATION share/${PROJECT_NAME}/
 )
 add_executable(hello_moveit src/hello_moveit.cpp)

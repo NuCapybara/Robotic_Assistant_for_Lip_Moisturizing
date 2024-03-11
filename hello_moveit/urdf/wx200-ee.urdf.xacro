@@ -1,0 +1,60 @@
+<?xml version="1.0"?>
+<robot name="wx200"
+    xmlns:xacro="http://ros.org/wiki/xacro">
+
+    <joint name="pen_robot_joint" type="fixed">
+                <!-- Interbotix have axis for all fixed joint.-->
+                <axis xyz="1 0 0"/>
+
+        <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+        <parent link="$(arg robot_name)/fingers_link"/>
+        <child link="pen"/>
+    </joint>
+
+    <link name="pen">
+        <inertial>
+            <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+            <mass value="0.001"/>
+            <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+        </inertial>
+        <visual name="">
+            <origin xyz="0.065 0.0 0.0" rpy="0.0 0.0 0.0"/>
+            <geometry>
+                 <!-- <box size="0.124 0.025 0.011"/> -->
+                 <box size="0.124 0.025 0.011"/>
+            </geometry>
+            <material name="">
+                <color rgba="1.0 1.0 1.0 0.95"/>
+            </material>
+        </visual>
+        <!-- <collision>
+            <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+            <geometry>
+                <mesh filename="${lollypop_mesh}" scale="1.0 1.0 1.0"/>
+            </geometry>
+        </collision> -->
+    </link>
+
+    <joint name="pen_ee_offset" type="fixed">
+        <!-- Interbotix have axis for all fixed joint.-->
+        <axis xyz="1 0 0"/>
+
+        <origin xyz="0.1 0.0 0.0" rpy="0.0 0.0 0.0"/>
+        <parent link="pen"/>
+        <child link="pen_ee_link"/>
+    </joint>
+
+    <link name="pen_ee_link">
+    <inertial>
+        <mass value="0.001"/>
+        <inertia
+          ixx="0.001"
+          iyy="0.001"
+          izz="0.001"
+          ixy="0"
+          ixz="0"
+          iyz="0"/>
+      </inertial>
+    </link>
+
+</robot>
