@@ -10,6 +10,7 @@
 #include "tf2_ros/static_transform_broadcaster.h"
 #include "geometry_msgs/msg/pose_array.hpp"
 #include <interbotix_xs_msgs/msg/joint_group_command.hpp>
+#include <interbotix_xs_msgs/msg/joint_trajectory_command.hpp>
 #include <interbotix_xs_msgs/srv/motor_gains.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
@@ -63,8 +64,8 @@ public:
         target_marker_arr_pub = node_ptr->create_publisher<visualization_msgs::msg::MarkerArray>("~/target_array", qos_policy);
         ///joint command publisher to move the robot
         joint_cmd_pub =
-        node_ptr->create_publisher<interbotix_xs_msgs::msg::JointGroupCommand>(
-            "/wx200/commands/joint_group", 10);
+        node_ptr->create_publisher<interbotix_xs_msgs::msg::JointTrajectoryCommand>(
+            "/wx200/commands/joint_trajectory", 10);
 
         // Let's try to do some dynamixal register fun
 
@@ -256,19 +257,8 @@ private:
                 RCLCPP_INFO_STREAM(logger, "Starting js buffer " << start_js_bf);
                 RCLCPP_INFO_STREAM(logger, "Ending js bufeer " << final_js_bf);
 
-                for (auto cmd_point : msg_bf.trajectory.joint_trajectory.points) {
-                    // std::chrono::nanoseconds new_time{
-                    //     uint64_t(cmd_point.time_from_start.nanosec +
-                    //             cmd_point.time_from_start.sec * 1e9)};
-
-                    // RCLCPP_WARN_STREAM(logger, "Sleep "
-                    //                                 << (new_time - last_time).count() / 1e6
-                    //                                 << "ms before sending");
-                    // rclcpp::sleep_for(new_time - last_time);
-                    // last_time = new_time;
-                    auto jg_cmd = GenArmCmd(cmd_point);
-                    joint_cmd_pub->publish(jg_cmd);
-                }
+                auto jg_cmd = GenArmCmd(msg_bf.trajectory.joint_trajectory);
+                joint_cmd_pub->publish(jg_cmd);
                 // RCLCPP_INFO_STREAM(logger, "SUCCESS Buffer Pose" << "index" << i);
             } else {
                 RCLCPP_ERROR(logger, "Planning failed! Buffer Pose");
@@ -323,7 +313,6 @@ private:
             // Execute the plan
             if(success) {
                 // move_group_interface.execute(plan);
-                for (auto cmd_point : msg.trajectory.joint_trajectory.points) {
                     // std::chrono::nanoseconds new_time{
                     //     uint64_t(cmd_point.time_from_start.nanosec +
                     //             cmd_point.time_from_start.sec * 1e9)};
@@ -333,9 +322,8 @@ private:
                     //                                 << "ms before sending");
                     // rclcpp::sleep_for(new_time - last_time);
                     // last_time = new_time;
-                    auto jg_cmd = GenArmCmd(cmd_point);
-                    joint_cmd_pub->publish(jg_cmd);
-                }
+                auto jg_cmd = GenArmCmd(msg.trajectory.joint_trajectory);
+                joint_cmd_pub->publish(jg_cmd);
                 RCLCPP_INFO_STREAM(logger, "SUCCESS Target Pose index" << i);
             } else {
                 RCLCPP_ERROR(logger, "Planning failed! index");
@@ -344,23 +332,32 @@ private:
             rclcpp::sleep_for(std::chrono::seconds(1));
         }
         ///going back to home pose
-        trajectory_msgs::msg::JointTrajectoryPoint home_point;
-        home_point.positions = {0.0, -1.88, 1.5, 0.8, 0.0};
-        home_point.time_from_start = rclcpp::Duration(10, 0);
+        trajectory_msgs::msg::JointTrajectory home_point;
+        home_point.joint_names = {"waist", "shoulder", "elbow", "wrist_angle", "wrist_rotate"};
+        // Assuming home_point is of a type that has a member `points` which is a vector of JointTrajectoryPoint
+        trajectory_msgs::msg::JointTrajectoryPoint new_point;
+
+        // Set positions for this new point. Adjust these values as necessary.
+        new_point.positions = {0.0, -1.88, 1.5, 0.8, 0.0};
+
+        // Set the time_from_start for this point. Adjust the duration as necessary.
+        new_point.time_from_start = rclcpp::Duration(1, 0);
+
+        // Add the newly configured point to the points vector
+        home_point.points.push_back(new_point);
+
         auto jg_cmd = GenArmCmd(home_point);
         joint_cmd_pub->publish(jg_cmd);
         rclcpp::sleep_for(std::chrono::seconds(5));
         maybe_curr_lip_pose.reset();
     }
 
-    interbotix_xs_msgs::msg::JointGroupCommand
-    GenArmCmd(trajectory_msgs::msg::JointTrajectoryPoint point) {
-
-        interbotix_xs_msgs::msg::JointGroupCommand jg_cmd;
+    interbotix_xs_msgs::msg::JointTrajectoryCommand
+    GenArmCmd(trajectory_msgs::msg::JointTrajectory point) {
+        interbotix_xs_msgs::msg::JointTrajectoryCommand jg_cmd;
+        jg_cmd.cmd_type = "group";
         jg_cmd.name = "arm";
-        for (auto j : point.positions) {
-        jg_cmd.cmd.push_back(j);
-        }
+        jg_cmd.traj = point;
         return jg_cmd;
     }
 
@@ -482,8 +479,7 @@ private:
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr target_marker_pub;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr target_marker_arr_pub;
     std::string ee_link_name;
-    rclcpp::Publisher<interbotix_xs_msgs::msg::JointGroupCommand>::SharedPtr
-    joint_cmd_pub;
+    rclcpp::Publisher<interbotix_xs_msgs::msg::JointTrajectoryCommand>::SharedPtr joint_cmd_pub;
     
 };
 
