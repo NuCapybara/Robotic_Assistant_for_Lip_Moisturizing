@@ -147,7 +147,7 @@ private:
         time_diff.seconds() );
         RCLCPP_INFO_STREAM(logger, "11111111111");
         visualization_msgs::msg::MarkerArray arr;
-        for(size_t i = 0; i < 7; i++){
+        for(size_t i = 0; i < 6; i++){
             geometry_msgs::msg::Pose target_pose_sim;
             // if(curr_lip_pose.poses[i].position.z > 0.5){
             //     target_pose_sim.position.x = 0.4;
@@ -192,7 +192,7 @@ private:
 
         // RCLCPP_INFO_STREAM(logger, "START PLAN AND EXECUTE");
         // RCLCPP_INFO_STREAM(logger, "curr_lip_pose.poses.size() " << curr_lip_pose.poses.size());
-        for(size_t i = 0; i < 7; i++){
+        for(size_t i = 0; i < 6; i++){
             geometry_msgs::msg::Pose eachPose;
             eachPose.position.x = curr_lip_pose.poses[i].position.x;
             eachPose.position.y = curr_lip_pose.poses[i].position.y;
@@ -255,17 +255,17 @@ private:
                 RCLCPP_INFO_STREAM(logger, "js_name buffer" << j_names_bf);
                 RCLCPP_INFO_STREAM(logger, "Starting js buffer " << start_js_bf);
                 RCLCPP_INFO_STREAM(logger, "Ending js bufeer " << final_js_bf);
-
+                std::chrono::nanoseconds last_time{0};
                 for (auto cmd_point : msg_bf.trajectory.joint_trajectory.points) {
-                    // std::chrono::nanoseconds new_time{
-                    //     uint64_t(cmd_point.time_from_start.nanosec +
-                    //             cmd_point.time_from_start.sec * 1e9)};
+                    std::chrono::nanoseconds new_time{
+                        uint64_t(cmd_point.time_from_start.nanosec +
+                                cmd_point.time_from_start.sec * 1e9)};
 
-                    // RCLCPP_WARN_STREAM(logger, "Sleep "
-                    //                                 << (new_time - last_time).count() / 1e6
-                    //                                 << "ms before sending");
-                    // rclcpp::sleep_for(new_time - last_time);
-                    // last_time = new_time;
+                    RCLCPP_WARN_STREAM(logger, "Sleep "
+                                                    << (new_time - last_time).count() / 1e6
+                                                    << "ms before sending");
+                    rclcpp::sleep_for(new_time - last_time);
+                    last_time = new_time;
                     auto jg_cmd = GenArmCmd(cmd_point);
                     joint_cmd_pub->publish(jg_cmd);
                 }
@@ -321,18 +321,20 @@ private:
             auto const plan = msg;
 
             // Execute the plan
+            
             if(success) {
                 // move_group_interface.execute(plan);
+                std::chrono::nanoseconds last_time{0};
                 for (auto cmd_point : msg.trajectory.joint_trajectory.points) {
-                    // std::chrono::nanoseconds new_time{
-                    //     uint64_t(cmd_point.time_from_start.nanosec +
-                    //             cmd_point.time_from_start.sec * 1e9)};
+                    std::chrono::nanoseconds new_time{
+                        uint64_t(cmd_point.time_from_start.nanosec +
+                                cmd_point.time_from_start.sec * 1e9)};
 
-                    // RCLCPP_WARN_STREAM(logger, "Sleep "
-                    //                                 << (new_time - last_time).count() / 1e6
-                    //                                 << "ms before sending");
-                    // rclcpp::sleep_for(new_time - last_time);
-                    // last_time = new_time;
+                    RCLCPP_WARN_STREAM(logger, "Sleep "
+                                                    << (new_time - last_time).count() / 1e6
+                                                    << "ms before sending");
+                    rclcpp::sleep_for(new_time - last_time);
+                    last_time = new_time;
                     auto jg_cmd = GenArmCmd(cmd_point);
                     joint_cmd_pub->publish(jg_cmd);
                 }
@@ -345,7 +347,7 @@ private:
         }
         ///going back to home pose
         trajectory_msgs::msg::JointTrajectoryPoint home_point;
-        home_point.positions = {0.0, -1.88, 1.5, 0.8, 0.0};
+        home_point.positions = {0.0, -1.48, 0.977, 0.71, 0.0};
         home_point.time_from_start = rclcpp::Duration(10, 0);
         auto jg_cmd = GenArmCmd(home_point);
         joint_cmd_pub->publish(jg_cmd);
